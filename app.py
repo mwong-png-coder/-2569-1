@@ -41,7 +41,20 @@ def index():
             target_img = cv2.imread(temp_target_path)
             if target_img is not None:
                 # ใช้ AI ตรวจจับใบหน้าพื้นฐาน (Haar Cascade) ของ OpenCV ซึ่งเสถียรและใช้งานบน Windows ได้ทันที
-                face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                # ดึงไฟล์ตรวจจับใบหน้าจากลิงก์ทางการของ OpenCV โดยตรง เพื่อให้รันได้ทุกเซิร์ฟเวอร์ทั่วโลก
+                cascade_url = "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
+                cascade_path = os.path.join(BASE_DIR, "haarcascade_frontalface_default.xml")
+                
+                if not os.path.exists(cascade_path):
+                    import urllib.request
+                    try:
+                        urllib.request.urlretrieve(cascade_url, cascade_path)
+                    except Exception as e:
+                        print(f"Error downloading cascade: {e}")
+
+                face_cascade = cv2.CascadeClassifier(cascade_path)
+                gray_target = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
+                faces_target = face_cascade.detectMultiScale(gray_target, 1.1, 4)
                 gray_target = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
                 faces_target = face_cascade.detectMultiScale(gray_target, 1.1, 4)
                 
