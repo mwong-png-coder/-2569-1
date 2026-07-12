@@ -40,7 +40,6 @@ def index():
             # อ่านรูปที่เราต้องการหา
             target_img = cv2.imread(temp_target_path)
             if target_img is not None:
-                # แก้ปัญหาตัวตรวจจับใบหน้า: ดึงไฟล์ xml ตรงจาก github มาเซ็ตค่า
                 cascade_url = "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
                 cascade_path = os.path.join(BASE_DIR, "haarcascade_frontalface_default.xml")
                 
@@ -53,12 +52,10 @@ def index():
 
                 face_cascade = cv2.CascadeClassifier(cascade_path)
                 
-                # เช็คว่าโหลดโมเดลเข้าตัวแปรสำเร็จไหมก่อนเริ่มทำงาน
                 if not face_cascade.empty():
                     gray_target = cv2.cvtColor(target_img, cv2.COLOR_BGR2GRAY)
-                    faces_target = face_cascade.detectMultiScale(gray_target, 1.1, 4)
                     
-                    # ค้นหาภาพโดยการใช้ os.walk มุดเข้าไปในทุกโฟลเดอร์ย่อย
+                    # ค้นหาภาพในทุกระดับโฟลเดอร์ย่อยลึกสุดใจ
                     if os.path.exists(PHOTOS_DIR):
                         for root, dirs, files in os.walk(PHOTOS_DIR):
                             for filename in files:
@@ -67,13 +64,16 @@ def index():
                                     try:
                                         current_img = cv2.imread(file_path)
                                         if current_img is not None:
-                                            # เช็คความคล้ายของพิกเซลภาพหน้าจอ
-                                            res = cv2.matchTemplate(cv2.cvtColor(current_img, cv2.COLOR_BGR2GRAY), gray_target, cv2.TM_CCOEFF_NORMED)
+                                            # เปลี่ยนเป็นขาวดำเพื่อพร้อมสแกน
+                                            gray_current = cv2.cvtColor(current_img, cv2.COLOR_BGR2GRAY)
+                                            
+                                            # สแกนจับคู่รูปภาพ
+                                            res = cv2.matchTemplate(gray_current, gray_target, cv2.TM_CCOEFF_NORMED)
                                             _, max_val, _, _ = cv2.minMaxLoc(res)
                                             
-                                            # เกณฑ์ความเหมือน
-                                            if max_val > 0.15: 
-                                                # แปลงที่อยู่ไฟล์ย่อยให้เป็น Path สำหรับใช้แสดงผลบนหน้าเว็บ Static HTML
+                                            # ปรับลดเกณฑ์ความเสมือนลงเหลือ 0.05 เพื่อให้เจอรูปง่ายขึ้น ป้องกันการดาวน์โหลดแล้วไฟล์ดรอป
+                                            if max_val > 0.05: 
+                                                # แก้ไขแก้ไข Path ส่งให้หน้าเว็บ HTML อ่านค่าได้ถูกต้อง ไม่ว่าจะอยู่ลึกแค่ไหน
                                                 relative_path = os.path.relpath(file_path, PHOTOS_DIR).replace('\\', '/')
                                                 matched_photos.append(relative_path)
                                     except Exception as e:
