@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports Day Photo Finder</title>
+    <!-- เรียกใช้ Tailwind CSS ช่วยให้หน้าเว็บสวยทันทีโดยไม่ต้องเขียนสไตล์แยก -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <!-- หัวข้อหลัก -->
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-black text-orange-500 mb-3">🏃‍♂️ Sports Day Photo Finder</h1>
+            <p class="text-slate-500 text-lg">งานกีฬาสีตามหารูปยากใช่ไหม? อัปโหลดหน้าตัวเองแล้วปล่อยให้ AI หาให้เลย!</p>
+        </div>
+
+        <!-- กล่องอัปโหลดรูปภาพ -->
+        <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-100 max-w-md mx-auto mb-12">
+            <form action="/" method="POST" enctype="multipart/form-data" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">📸 รูปถ่ายหน้าตรงของคุณ (เห็นชัด ไม่ย้อนแสง)</label>
+                    <input type="file" name="search_face" accept="image/*" required
+                        class="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 cursor-pointer"/>
+                </div>
+                <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-xl transition duration-200 shadow-sm">
+                    🔍 เริ่มสแกนหารูปภาพของฉัน
+                </button>
+            </form>
+        </div>
+
+        <!-- ส่วนแสดงผลลัพธ์รูปภาพที่สแกนเจอ -->
+        <div class="border-t border-slate-200 pt-8">
+            <h2 class="text-2xl font-bold mb-6 text-center text-slate-700">✨ รูปถ่ายกีฬาสีที่มีคุณ ✨</h2>
+            
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                <!-- วนลูปแสดงรูปภาพที่ AI หาเจอจาก Flask Backend -->
+                {% for photo in matched_photos %}
+                <div class="overflow-hidden rounded-2xl shadow-sm bg-white border border-slate-100 group">
+                    <img src="{{ url_for('static', filename='photos/' + photo) }}" class="w-full h-56 object-cover group-hover:scale-105 transition duration-300" alt="รูปภาพกีฬาสี">
+                    <div class="p-3 text-center bg-slate-50 border-t border-slate-100">
+                        <a href="{{ url_for('static', filename='photos/' + photo) }}" download class="text-orange-500 hover:text-orange-600 font-bold text-sm">💾 ดาวน์โหลดรูปภาพ</a>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-span-full text-center text-slate-400 py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+                    ยังไม่มีการค้นหา หรือ ไม่พบรูปภาพใบหน้าของคุณในระบบคลังรูปภาพ
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
