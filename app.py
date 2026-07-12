@@ -10,13 +10,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PHOTOS_DIR = os.path.join(BASE_DIR, 'static', 'photos')
 
 # ⚠️ แปะ "รหัสโฟลเดอร์แชร์ยาวๆ" จาก Google Drive ของนายลงในนี้ (ถ้าดึงจากคอมตรงๆ ปล่อยว่างไว้ได้เลย)
-GOOGLE_DRIVE_FOLDER_ID = '1G3-i_p57ReBsRHzkZj4ID1YAdfjPLrbq'
+GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHPp9ME88HVnhPdb'
 
 if not os.path.exists(PHOTOS_DIR):
     os.makedirs(PHOTOS_DIR, exist_ok=True)
 
 def sync_photos_from_drive():
-    if GOOGLE_DRIVE_FOLDER_ID and GOOGLE_DRIVE_FOLDER_ID != '1G3-i_p57ReBsRHzkZj4ID1YAdfjPLrbq':
+    if GOOGLE_DRIVE_FOLDER_ID and GOOGLE_DRIVE_FOLDER_ID != '1O6e6-XFTMsz6R1MJBHPp9ME88HVnhPdb':
         try:
             print("🔄 กำลังซิงค์รูปภาพจาก Google Drive...")
             gdown.download_folder(id=GOOGLE_DRIVE_FOLDER_ID, output=PHOTOS_DIR, quiet=False, remaining_ok=True)
