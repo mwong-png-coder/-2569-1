@@ -1,93 +1,139 @@
-document.getElementById('search-btn').addEventListener('click', async () => {
-            const fileInput = document.getElementById('search_face');
-            if (!fileInput.files.length) return alert('กรุณาเลือกไฟล์ภาพก่อนครับนาย');
+...
+    <div id="result-section" class="mt-8 hidden">
+        ...
+    </div>
+</div>
 
-            let file = fileInput.files[0];
-            const statusText = document.getElementById('status-text');
-            const gridPhotos = document.getElementById('grid-photos');
-            const resultSection = document.getElementById('result-section');
+<script>
+    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+    let allDrivePhotos = [];
 
-            statusText.classList.remove('hidden');
-            resultSection.classList.add('hidden');
-            gridPhotos.innerHTML = '';
+    document.getElementById('search_face').addEventListener('change', (e) => {
+        const labelSpan = document.querySelector('.text-gray-500');
+        if(e.target.files.length > 0) {
+            labelSpan.innerText = e.target.files[0].name;
+        }
+    });
 
-            let imageElementToScan = new Image();
-
-            if (file.name.match(/\.(heic|heif)$/i)) {
-                statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) ส่งให้เซิร์ฟเวอร์หลังบ้านแปลงภาพถอดรหัส...';
-                try {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    const convertRes = await fetch('/api/convert-heic', { method: 'POST', body: formData });
-                    const convertData = await convertRes.json();
-                    if(convertData.error) throw new Error(convertData.error);
-                    imageElementToScan.src = convertData.base64;
-                    await new Promise(resolve => imageElementToScan.onload = resolve);
-                } catch (heicErr) {
-                    statusText.innerText = '❌ ระบบแปลงไฟล์ขัดข้อง กรุณาลองอัปโหลดใหม่อีกครั้งครับ';
-                    return;
-                }
-            } else {
-                imageElementToScan = await faceapi.bufferToImage(file);
-            }
-
-            statusText.innerText = '⏳ AI กำลังถอดรหัสเวกเตอร์ใบหน้าต้นฉบับของคุณ...';
+    async function initAI() {
+        try {
+            // โหลดโมเดล Tiny เพื่อเน้นส่องใบหน้าขนาดเล็กและจำนวนมากในห้องสอบ
+            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
             
-            // 🎯 ปรับจูนจุดที่ 1: ลด scoreThreshold ของรูปต้นฉบับลงเหลือ 0.3 เพื่อดึงเวกเตอร์ใบหน้าออกมาให้ได้ชัวร์ที่สุด
-            const targetDetection = await faceapi.detectSingleFace(
-                imageElementToScan, 
-                new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
-            ).withFaceLandmarks().withFaceDescriptor();
+            const loader = document.getElementById('loading-ai');
+            loader.className = "text-sm text-green-600 font-medium mb-4";
+            loader.innerText = '✅ ระบบ AI คลังรูปภาพ และคอร์แปลงไฟล์ระดับเซิร์ฟเวอร์ พร้อมใช้งาน!';
+            
+            document.getElementById('search_face').disabled = false;
+            document.getElementById('search-btn').disabled = false;
 
-            if (!targetDetection) {
-                statusText.innerText = '❌ AI ตรวจไม่พบโครงสร้างใบหน้าในรูปหัวเชื้อ กรุณาใช้รูปที่เห็นหน้าตรงชัดเจนกว่านี้ครับ';
+            const res = await fetch('/api/photos');
+            allDrivePhotos = await res.json();
+            console.log("คลังรูปภาพโหลดพร้อมสแกน:", allDrivePhotos.length);
+        } catch (e) {
+            console.error(e);
+            document.getElementById('loading-ai').innerText = '❌ โหลดระบบล้มเหลว กรุณารีเฟรชหน้าเว็บ';
+        }
+    }
+
+    // 🎯 โค้ด JavaScript ชุดเต็มตัวแก้ไขรอบที่แล้วที่นายวางผิดที่
+    document.getElementById('search-btn').addEventListener('click', async () => {
+        const fileInput = document.getElementById('search_face');
+        if (!fileInput.files.length) return alert('กรุณาเลือกไฟล์ภาพถ่ายใบหน้าก่อนครับนาย');
+
+        let file = fileInput.files[0];
+        const statusText = document.getElementById('status-text');
+        const gridPhotos = document.getElementById('grid-photos');
+        const resultSection = document.getElementById('result-section');
+
+        statusText.classList.remove('hidden');
+        resultSection.classList.add('hidden');
+        gridPhotos.innerHTML = '';
+
+        let imageElementToScan = new Image();
+
+        if (file.name.match(/\.(heic|heif)$/i)) {
+            statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) ส่งให้เซิร์ฟเวอร์หลังบ้านแปลงภาพถอดรหัส...';
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const convertRes = await fetch('/api/convert-heic', { method: 'POST', body: formData });
+                const convertData = await convertRes.json();
+                if(convertData.error) throw new Error(convertData.error);
+                imageElementToScan.src = convertData.base64;
+                await new Promise(resolve => imageElementToScan.onload = resolve);
+            } catch (heicErr) {
+                statusText.innerText = '❌ ระบบแปลงไฟล์ขัดข้อง กรุณาลองอัปโหลดใหม่อีกครั้งครับ';
                 return;
             }
+        } else {
+            imageElementToScan = await faceapi.bufferToImage(file);
+        }
 
-            // 🎯 ปรับจูนจุดที่ 2: ขยับเกณฑ์ระยะห่างใบหน้า (Distance Threshold) เป็น 0.6 เพื่อให้ AI ยืดหยุ่นกับรูปที่แสงเปลี่ยนหรือรูปที่ถูกบีบอัด
-            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.60);
-            let matchCount = 0;
-            statusText.innerText = `🔄 Tiny AI กำลังซูมและเจาะค้นหาภาพในคลัง (${allDrivePhotos.length} รูป)...`;
+        statusText.innerText = '⏳ AI กำลังสกัดเวกเตอร์ใบหน้าต้นฉบับของคุณ...';
+        
+        // 🎯 ปรับจูนจุดที่ 1: ลด scoreThreshold ของรูปต้นฉบับลงเหลือ 0.3 เพื่อดึงเวกเตอร์ใบหน้าออกมาให้ได้ชัวร์ที่สุด
+        const targetDetection = await faceapi.detectSingleFace(
+            imageElementToScan, 
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
+        ).withFaceLandmarks().withFaceDescriptor();
 
-            for (let photo of allDrivePhotos) {
-                try {
-                    const currentImg = new Image();
-                    currentImg.src = photo.base64;
-                    await new Promise(resolve => currentImg.onload = resolve);
-                    
-                    // ปรับความละเอียดการไล่สแกนพิกเซลภาพในไดร์ฟให้ไวและกว้างขึ้น
-                    const detections = await faceapi.detectAllFaces(
-                        currentImg, 
-                        new faceapi.TinyFaceDetectorOptions({ inputSize: 864, scoreThreshold: 0.2 })
-                    ).withFaceLandmarks().withFaceDescriptors();
+        if (!targetDetection) {
+            statusText.innerText = '❌ AI ตรวจไม่พบโครงสร้างใบหน้าในรูปที่อัปโหลด กรุณาใช้รูปที่เห็นหน้าชัดเจนกว่านี้ครับ';
+            return;
+        }
 
-                    let isMatchInPhoto = false;
+        // 🎯 ปรับจูนจุดที่ 2: ขยับเกณฑ์ระยะห่างใบหน้า (Distance Threshold) เป็น 0.6 เพื่อยืดหยุ่นกับรูปหมู่ในห้องสอบ
+        const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.60);
+        let matchCount = 0;
+        statusText.innerText = `🔄 Tiny AI กำลังซูมและเจาะค้นหาใบหน้าจากคลังทั้งหมด (${allDrivePhotos.length} รูป)...`;
 
-                    // 🎯 ปรับจูนจุดที่ 3: ไล่เช็คทุกใบหน้าที่มีในรูปภาพให้ครบ ห้ามกด break หนีไปก่อน เพื่อรองรับรูปหมู่หรือรูปในห้องสอบ
-                    for (let d of detections) {
-                        const match = faceMatcher.findBestMatch(d.descriptor);
-                        if (match.label !== 'unknown') {
-                            isMatchInPhoto = true;
-                            break; // เจอหน้าเราในรูปนี้แล้ว ค่อยหยุดเช็คหน้าอื่นในรูปเดียวกัน
-                        }
+        for (let photo of allDrivePhotos) {
+            try {
+                const currentImg = new Image();
+                currentImg.src = photo.base64;
+                await new Promise(resolve => currentImg.onload = resolve);
+                
+                const detections = await faceapi.detectAllFaces(
+                    currentImg, 
+                    new faceapi.TinyFaceDetectorOptions({ inputSize: 864, scoreThreshold: 0.2 })
+                ).withFaceLandmarks().withFaceDescriptors();
+
+                let isMatchInPhoto = false;
+
+                // 🎯 ปรับจูนจุดที่ 3: ไล่เช็คทุกใบหน้าที่มีในรูป ห้ามกด break หนีไปก่อน เพื่อรองรับรูปหมู่หรือรูปในห้องสอบ
+                for (let d of detections) {
+                    const match = faceMatcher.findBestMatch(d.descriptor);
+                    if (match.label !== 'unknown') {
+                        isMatchInPhoto = true;
+                        break; // เจอหน้าเราในรูปนี้แล้ว ค่อยหยุดเช็คหน้าอื่นในรูปเดียวกัน
                     }
-
-                    if (isMatchInPhoto) {
-                        matchCount++;
-                        const div = document.createElement('div');
-                        div.className = 'bg-white p-2 rounded-lg shadow-sm border border-gray-100 transition hover:scale-[1.03] duration-200';
-                        div.innerHTML = `<img src="${photo.base64}" class="rounded-md w-full h-auto object-cover aspect-square">`;
-                        gridPhotos.appendChild(div);
-                        resultSection.classList.remove('hidden');
-                    }
-                } catch (err) {
-                    console.log("Error scanning photo:", err);
                 }
-            }
 
-            if (matchCount === 0) {
-                statusText.innerText = '❌ AI ตรวจค้นเสร็จสิ้น ไม่พบรูปภาพใบหน้าของคุณในคลังระบบครับ';
-            } else {
-                statusText.innerText = `🎉 สำเร็จ! AI เจาะค้นพบรูปภาพของคุณในกิจกรรมทั้งหมด ${matchCount} รูปครับนาย`;
+                if (isMatchInPhoto) {
+                    matchCount++;
+                    const div = document.createElement('div');
+                    div.className = 'bg-white p-2 rounded-lg shadow-sm border border-gray-100 transition hover:scale-[1.03] duration-200';
+                    div.innerHTML = `<img src="${photo.base64}" class="rounded-md w-full h-auto object-cover aspect-square">`;
+                    gridPhotos.appendChild(div);
+                    resultSection.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.log("Error scanning photo:", err);
             }
-        });
+        }
+
+        if (matchCount === 0) {
+            statusText.innerText = '❌ AI ตรวจค้นครบแล้ว ไม่พบภาพใบหน้าของคุณในคลังระบบครับ';
+        } else {
+            statusText.innerText = `🎉 สำเร็จ! AI เจาะค้นพบรูปภาพของคุณในกิจกรรมทั้งหมด ${matchCount} รูปครับนาย`;
+        }
+    });
+
+    window.onload = initAI;
+</script>
+
+</body>
+</html>
