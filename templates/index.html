@@ -1,65 +1,4 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบค้นหาภาพถ่ายกิจกรรมโรงเรียน</title>
-    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-50 min-h-screen font-sans antialiased">
-    <div class="container mx-auto max-w-4xl p-4 pt-12">
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center max-w-md mx-auto">
-            <h1 class="text-xl font-bold text-gray-800 mb-2">📸 ค้นหารูปภาพโรงเรียนด้วยใบหน้า</h1>
-            <p id="loading-ai" class="text-sm text-amber-600 font-medium mb-4 bg-amber-50 py-1.5 rounded-lg">⏳ กำลังเตรียมระบบ AI และคลังรูปภาพ...</p>
-
-            <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 mb-4 hover:border-blue-500 bg-gray-50/50 transition">
-                <input type="file" id="search_face" accept="image/*,.heic,.heif" class="hidden" disabled>
-                <button type="button" onclick="document.getElementById('search_face').click();" class="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">เลือกรูปถ่ายใบหน้า</button>
-                <div id="file-name-text" class="text-xs text-gray-400 mt-2 truncate max-w-[250px] mx-auto">ยังไม่ได้เลือกไฟล์ภาพ (รองรับ JPG, PNG, HEIC)</div>
-            </div>
-            <button id="search-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition disabled:bg-gray-300" disabled>🔍 เริ่มให้ AI สแกนค้นหาใบหน้า</button>
-        </div>
-
-        <div id="status-text" class="text-center mt-6 text-sm text-gray-600 font-medium bg-white max-w-md mx-auto p-3 rounded-lg border border-gray-100 shadow-sm hidden"></div>
-
-        <div id="result-section" class="mt-8 hidden">
-            <h2 class="text-md font-bold text-gray-700 mb-4">✨ พบรูปภาพของคุณในกิจกรรม:</h2>
-            <div id="grid-photos" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
-        </div>
-    </div>
-
-    <script>
-        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-        let allDrivePhotos = [];
-
-        document.getElementById('search_face').addEventListener('change', (e) => {
-            const nameDisplay = document.getElementById('file-name-text');
-            if(e.target.files.length > 0) {
-                nameDisplay.innerText = `ไฟล์ที่เลือก: ${e.target.files[0].name}`;
-                nameDisplay.className = "text-xs text-blue-600 font-medium mt-2 truncate";
-            }
-        });
-
-        async function initAI() {
-            try {
-                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-                
-                document.getElementById('loading-ai').className = "text-sm text-green-700 font-medium mb-4 bg-green-50 py-1.5 rounded-lg";
-                document.getElementById('loading-ai').innerText = '✅ ระบบ AI คลังรูปภาพ และระบบแปลงไฟล์ iPhone พร้อมใช้งาน!';
-                document.getElementById('search_face').disabled = false;
-                document.getElementById('search-btn').disabled = false;
-
-                const res = await fetch('/api/photos');
-                allDrivePhotos = await res.json();
-            } catch (e) {
-                document.getElementById('loading-ai').innerText = '❌ โหลดระบบล้มเหลว กรุณารีเฟรชหน้าเว็บ';
-            }
-        }
-
-        document.getElementById('search-btn').addEventListener('click', async () => {
+document.getElementById('search-btn').addEventListener('click', async () => {
             const fileInput = document.getElementById('search_face');
             if (!fileInput.files.length) return alert('กรุณาเลือกไฟล์ภาพก่อนครับนาย');
 
@@ -93,14 +32,20 @@
             }
 
             statusText.innerText = '⏳ AI กำลังถอดรหัสเวกเตอร์ใบหน้าต้นฉบับของคุณ...';
-            const targetDetection = await faceapi.detectSingleFace(imageElementToScan, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 })).withFaceLandmarks().withFaceDescriptor();
+            
+            // 🎯 ปรับจูนจุดที่ 1: ลด scoreThreshold ของรูปต้นฉบับลงเหลือ 0.3 เพื่อดึงเวกเตอร์ใบหน้าออกมาให้ได้ชัวร์ที่สุด
+            const targetDetection = await faceapi.detectSingleFace(
+                imageElementToScan, 
+                new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
+            ).withFaceLandmarks().withFaceDescriptor();
 
             if (!targetDetection) {
                 statusText.innerText = '❌ AI ตรวจไม่พบโครงสร้างใบหน้าในรูปหัวเชื้อ กรุณาใช้รูปที่เห็นหน้าตรงชัดเจนกว่านี้ครับ';
                 return;
             }
 
-            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.55);
+            // 🎯 ปรับจูนจุดที่ 2: ขยับเกณฑ์ระยะห่างใบหน้า (Distance Threshold) เป็น 0.6 เพื่อให้ AI ยืดหยุ่นกับรูปที่แสงเปลี่ยนหรือรูปที่ถูกบีบอัด
+            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.60);
             let matchCount = 0;
             statusText.innerText = `🔄 Tiny AI กำลังซูมและเจาะค้นหาภาพในคลัง (${allDrivePhotos.length} รูป)...`;
 
@@ -110,21 +55,34 @@
                     currentImg.src = photo.base64;
                     await new Promise(resolve => currentImg.onload = resolve);
                     
-                    const detections = await faceapi.detectAllFaces(currentImg, new faceapi.TinyFaceDetectorOptions({ inputSize: 864, scoreThreshold: 0.2 })).withFaceLandmarks().withFaceDescriptors();
+                    // ปรับความละเอียดการไล่สแกนพิกเซลภาพในไดร์ฟให้ไวและกว้างขึ้น
+                    const detections = await faceapi.detectAllFaces(
+                        currentImg, 
+                        new faceapi.TinyFaceDetectorOptions({ inputSize: 864, scoreThreshold: 0.2 })
+                    ).withFaceLandmarks().withFaceDescriptors();
 
+                    let isMatchInPhoto = false;
+
+                    // 🎯 ปรับจูนจุดที่ 3: ไล่เช็คทุกใบหน้าที่มีในรูปภาพให้ครบ ห้ามกด break หนีไปก่อน เพื่อรองรับรูปหมู่หรือรูปในห้องสอบ
                     for (let d of detections) {
                         const match = faceMatcher.findBestMatch(d.descriptor);
                         if (match.label !== 'unknown') {
-                            matchCount++;
-                            const div = document.createElement('div');
-                            div.className = 'bg-white p-2 rounded-lg shadow-sm border border-gray-100 transition hover:scale-[1.03] duration-200';
-                            div.innerHTML = `<img src="${photo.base64}" class="rounded-md w-full h-auto object-cover aspect-square">`;
-                            gridPhotos.appendChild(div);
-                            resultSection.classList.remove('hidden');
-                            break; 
+                            isMatchInPhoto = true;
+                            break; // เจอหน้าเราในรูปนี้แล้ว ค่อยหยุดเช็คหน้าอื่นในรูปเดียวกัน
                         }
                     }
-                } catch (err) {}
+
+                    if (isMatchInPhoto) {
+                        matchCount++;
+                        const div = document.createElement('div');
+                        div.className = 'bg-white p-2 rounded-lg shadow-sm border border-gray-100 transition hover:scale-[1.03] duration-200';
+                        div.innerHTML = `<img src="${photo.base64}" class="rounded-md w-full h-auto object-cover aspect-square">`;
+                        gridPhotos.appendChild(div);
+                        resultSection.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    console.log("Error scanning photo:", err);
+                }
             }
 
             if (matchCount === 0) {
@@ -133,8 +91,3 @@
                 statusText.innerText = `🎉 สำเร็จ! AI เจาะค้นพบรูปภาพของคุณในกิจกรรมทั้งหมด ${matchCount} รูปครับนาย`;
             }
         });
-
-        window.onload = initAI;
-    </script>
-</body>
-</html>
