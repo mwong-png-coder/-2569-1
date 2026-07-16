@@ -1,11 +1,16 @@
 import os
 import requests
 import base64
-from flask import Flask, render_template, jsonify
+import io
+from flask import Flask, render_template, jsonify, request
+from PIL import Image
+from pillow_heif import register_heif_opener
+
+# ลงทะเบียนระบบเปิดไฟล์ iPhone HEIC
+register_heif_opener()
 
 app = Flask(__name__)
 
-# ไอดีโฟลเดอร์เก็บภาพกิจกรรม
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
 
 @app.route('/')
@@ -36,8 +41,25 @@ def get_photos():
                 })
         return jsonify(photo_data_list)
     except Exception as e:
-        print(f"❌ Error: {e}")
         return jsonify([])
+
+@app.route('/api/convert-heic', methods=['POST'])
+def convert_heic():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file'}), 400
+        file = request.files['file']
+        image = Image.open(file)
+        image.thumbnail((1024, 1024)) # บีบภาพเล็กน้อยให้โหลดเร็ว
+        
+        output = io.BytesIO()
+        image.convert("RGB").save(output, format="JPEG", quality=85)
+        output.seek(0)
+        
+        encoded_img = base64.b64encode(output.read()).decode('utf-8')
+        return jsonify({'base64': f"data:image/jpeg;base64,{encoded_img}"})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
