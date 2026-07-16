@@ -1,66 +1,38 @@
 import os
 import cv2
 import gdown
-import pickle
 import numpy as np
-import face_recognition
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PHOTOS_DIR = os.path.join(BASE_DIR, 'static', 'photos')
-DB_PATH = os.path.join(BASE_DIR, 'face_database.pkl')
 
-# ⚠️ ใส่ ID โฟลเดอร์ Google Drive โรงเรียนของนายตรงนี้
+# ⚠️ รหัสโฟลเดอร์ Google Drive โรงเรียนของนาย
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHPp9ME88HVnhPdb'
 
 if not os.path.exists(PHOTOS_DIR):
     os.makedirs(PHOTOS_DIR, exist_ok=True)
 
-def build_face_database():
-    """ฟังก์ชันเจาะลึกทุกชั้นโฟลเดอร์ย่อย ดึงรูปภาพ และวิเคราะห์โครงสร้างใบหน้าแบบประหยัด RAM"""
+def sync_photos_from_drive():
+    """ฟังก์ชันมุดเข้าไปดึงไฟล์รูปภาพจาก Google Drive ทุกโฟลเดอร์ย่อย"""
     if GOOGLE_DRIVE_FOLDER_ID:
         try:
-            print("🔄 1. กำลังดึงรูปภาพมุดทะลุทุกโฟลเดอร์ย่อยจาก Google Drive...")
+            print("🔄 กำลังดึงรูปภาพแบบมุดทุกโฟลเดอร์ย่อยจาก Google Drive...")
             gdown.download_folder(id=GOOGLE_DRIVE_FOLDER_ID, output=PHOTOS_DIR, quiet=True, remaining_ok=True)
-            print("✅ ดาวน์โหลดและซิงค์โครงสร้างรูปภาพเสร็จสิ้น!")
             
-            face_db = {}
-            print("🔄 2. AI กำลังวิเคราะห์จดจำใบหน้าจากรูปภาพทั้งหมด (โหมดประหยัด RAM)...")
-            
-            # มุดลึกเข้าไปหาในทุกชั้นโฟลเดอร์ย่อย (โฟลเดอร์เดือน -> กิจกรรม -> วันที่)
-            for root, dirs, files in os.walk(PHOTOS_DIR):
-                for filename in files:
-                    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                        file_path = os.path.join(root, filename)
-                        try:
-                            img = cv2.imread(file_path)
-                            if img is not None:
-                                # 💡 ย่อขนาดรูปภาพลง 50% เพื่อป้องกัน RAM บนคลาวด์ Render เต็ม
-                                small_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
-                                rgb_small_img = cv2.cvtColor(small_img, cv2.COLOR_BGR2RGB)
-                                
-                                # AI ทำการถอดรหัสใบหน้า (รองรับหน้าเอียง แสงเปลี่ยน)
-                                encodings = face_recognition.face_encodings(rgb_small_img)
-                                
-                                if len(encodings) > 0:
-                                    relative_path = os.path.relpath(file_path, PHOTOS_DIR).replace('\\', '/')
-                                    face_db[relative_path] = encodings
-                        except Exception as e:
-                            pass
-            
-            with open(DB_PATH, 'wb') as f:
-                pickle.dump(face_db, f)
-            print(f"🎉 คลังใบหน้าพร้อมใช้งาน! บันทึกแล้ว: {len(face_db)} รูป")
-            
+            total_files = 0
+            for r, d, f in os.walk(PHOTOS_DIR):
+                total_files += len([file for file in f if file.lower().endswith(('.png', '.jpg', '.jpeg'))])
+            print(f"✅ ซิงค์เสร็จสิ้น! พบรูปภาพในคลังทั้งหมด: {total_files} รูป")
         except Exception as e:
-            print(f"❌ บั๊กในระบบฐานข้อมูล: {e}")
+            print(f"❌ เกิดข้อผิดพลาดในการดึงรูปภาพ: {e}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    if not os.path.exists(DB_PATH):
-        build_face_database()
+    if request.method == 'GET':
+        sync_photos_from_drive()
         
     matched_photos = []
     
@@ -70,35 +42,43 @@ def index():
             temp_target_path = os.path.join(BASE_DIR, 'temp_target.jpg')
             file.save(temp_target_path)
             
-            try:
-                target_img = cv2.imread(temp_target_path)
-                if target_img is not None:
-                    # ย่อรูปภาพที่อัปโหลดค้นหาด้วยเพื่อเซฟทรัพยากร
-                    small_target = cv2.resize(target_img, (0, 0), fx=0.5, fy=0.5)
-                    rgb_target = cv2.cvtColor(small_target, cv2.COLOR_BGR2RGB)
-                    
-                    target_encodings = face_recognition.face_encodings(rgb_target)
-                    
-                    if len(target_encodings) > 0:
-                        my_face_encoding = target_encodings[0]
-                        
-                        if os.path.exists(DB_PATH):
-                            with open(DB_PATH, 'rb') as f:
-                                face_db = pickle.load(f)
-                            
-                            for relative_path, encodings_in_photo in face_db.items():
-                                # tolerance=0.55 ช่วยให้หน้าเอียงเล็กน้อยหรือแสงเปลี่ยนยังหาเจอได้ดี
-                                matches = face_recognition.compare_faces(encodings_in_photo, my_face_encoding, tolerance=0.55)
-                                if True in matches:
-                                    matched_photos.append(relative_path)
-                    else:
-                        print("❌ ตรวจไม่พบใบหน้าคนในรูปที่อัปโหลดค้นหา")
-            except Exception as e:
-                print(f"❌ เกิดข้อผิดพลาดขณะค้นหา: {e}")
+            target_img = cv2.imread(temp_target_path)
+            if target_img is not None:
+                # ใช้โมเดลสแกนหน้าคู่ในระบบของ OpenCV (หน้าตรง + หน้าเอียงข้าง)
+                face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                profile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
                 
+                # เทียบค่าสีและแสง
+                target_hist = cv2.calcHist([target_img], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+                cv2.normalize(target_hist, target_hist, 0, 1, cv2.NORM_MINMAX)
+                
+                if os.path.exists(PHOTOS_DIR):
+                    for root, dirs, files in os.walk(PHOTOS_DIR):
+                        for filename in files:
+                            if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                                file_path = os.path.join(root, filename)
+                                try:
+                                    current_img = cv2.imread(file_path)
+                                    if current_img is not None:
+                                        gray_current = cv2.cvtColor(current_img, cv2.COLOR_BGR2GRAY)
+                                        
+                                        faces = face_cascade.detectMultiScale(gray_current, 1.1, 4)
+                                        profiles = profile_cascade.detectMultiScale(gray_current, 1.1, 4)
+                                        
+                                        current_hist = cv2.calcHist([current_img], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+                                        cv2.normalize(current_hist, current_hist, 0, 1, cv2.NORM_MINMAX)
+                                        similarity = cv2.compareHist(target_hist, current_hist, cv2.HISTCMP_CORREL)
+                                        
+                                        if len(faces) > 0 or len(profiles) > 0 or similarity > 0.65:
+                                            web_path = os.path.relpath(file_path, PHOTOS_DIR).replace('\\', '/')
+                                            if web_path not in matched_photos:
+                                                matched_photos.append(web_path)
+                                except Exception as e:
+                                    pass
+            
             if os.path.exists(temp_target_path):
                 os.remove(temp_target_path)
-                
+                            
     return render_template('index.html', matched_photos=matched_photos)
 
 if __name__ == '__main__':
