@@ -16,7 +16,6 @@ if not os.path.exists(PHOTOS_DIR):
     os.makedirs(PHOTOS_DIR, exist_ok=True)
 
 def sync_photos_from_drive():
-    """ฟังก์ชันมุดเข้าไปดึงไฟล์รูปภาพจาก Google Drive ทุกโฟลเดอร์ย่อย"""
     if GOOGLE_DRIVE_FOLDER_ID:
         try:
             print("🔄 กำลังดึงรูปภาพแบบมุดทุกโฟลเดอร์ย่อยจาก Google Drive...")
@@ -44,11 +43,10 @@ def index():
             
             target_img = cv2.imread(temp_target_path)
             if target_img is not None:
-                # ใช้โมเดลสแกนหน้าคู่ในระบบของ OpenCV (หน้าตรง + หน้าเอียงข้าง)
+                # โหลดโมเดลผ่าน path สัมบูรณ์เพื่อความชัวร์บน Linux ของ Render
                 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
                 profile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
                 
-                # เทียบค่าสีและแสง
                 target_hist = cv2.calcHist([target_img], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
                 cv2.normalize(target_hist, target_hist, 0, 1, cv2.NORM_MINMAX)
                 
