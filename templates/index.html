@@ -31,23 +31,24 @@
 
     <script>
         const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-        let allPhotos = [];
+        let allDrivePhotos = [];
 
+        // 1. เปลี่ยนมาโหลด Tiny Face Detector เพื่อเน้นส่องใบหน้าขนาดเล็กและหน้าเอียงจำนวนมาก
         async function initAI() {
             try {
-                document.getElementById('loading-ai').innerText = '⏳ กำลังเปิดระบบ AI ตรวจจับความละเอียดสูง...';
-                await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+                document.getElementById('loading-ai').innerText = '⏳ กำลังเปิดระบบ AI โหมดเจาะส่องใบหน้าขนาดเล็ก...';
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
                 
-                document.getElementById('loading-ai').innerText = '✅ ระบบ AI ตัวท็อปพร้อมประมวลผลค้นหาใบหน้าแล้ว!';
+                document.getElementById('loading-ai').innerText = '✅ ระบบ AI โหมดเจาะลึกพร้อมสแกนรูปจาก Google Drive แล้ว!';
                 document.getElementById('search_face').disabled = false;
                 document.getElementById('search-btn').disabled = false;
 
                 const res = await fetch('/api/photos');
-                allPhotos = await res.json();
+                allDrivePhotos = await res.json();
             } catch (e) {
-                document.getElementById('loading-ai').innerText = '❌ โหลดโมเดลล้มเหลว กรุณารีเฟรชหน้าเว็บอีกครั้งครับ';
+                document.getElementById('loading-ai').innerText = '❌ โหลดระบบล้มเหลว กรุณารีเฟรชหน้าเว็บอีกครั้งครับ';
             }
         }
 
@@ -63,36 +64,37 @@
             resultSection.classList.add('hidden');
             gridPhotos.innerHTML = '';
 
-            statusText.innerText = '⏳ AI กำลังสกัดพิกัดและวิเคราะห์โครงสร้างใบหน้าต้นฉบับ...';
+            statusText.innerText = '⏳ AI กำลังสกัดเวกเตอร์ใบหน้าต้นฉบับของคุณ...';
             
             const targetImg = await faceapi.bufferToImage(fileInput.files[0]);
             
-            // อ่านโครงสร้างใบหน้าต้นฉบับด้วยโหมด SSD ละเอียด
+            // สแกนใบหน้าต้นฉบับที่เราอัปโหลดเข้าไปตั้งต้น
             const targetDetection = await faceapi.detectSingleFace(
                 targetImg, 
-                new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 })
+                new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
             ).withFaceLandmarks().withFaceDescriptor();
 
             if (!targetDetection) {
-                statusText.innerText = '❌ AI ตรวจไม่พบใบหน้าในรูปที่อัปโหลด กรุณาลองใช้รูปที่เห็นหน้าชัดเจนกว่านี้เพื่อตั้งต้นครับ';
+                statusText.innerText = '❌ AI ตรวจไม่พบใบหน้าในรูปหัวเชื้อที่อัปโหลด กรุณาใช้รูปที่เห็นหน้าตรงชัดเจนมาครอบลิงก์ครับ';
                 return;
             }
 
-            // 🎯 ปรับเกณฑ์ความเป๊ะไว้ที่ 0.55 (เป็นช่วงที่สมดุลที่สุดในการดึงคนหน้าเอียง/ไกล และคัดคนอื่นออก)
+            // 🎯 ปรับเกณฑ์ความเป๊ะไว้ที่ 0.55 (บาลานซ์ที่ดีที่สุดของ Tiny Face บนรูปจากไดรฟ์)
             const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.55);
             let matchCount = 0;
 
-            statusText.innerText = `🔄 กำลังไล่สแกนจับคู่ใบหน้าในคลังภาพ (${allPhotos.length} รูป)...`;
+            statusText.innerText = `🔄 Tiny AI กำลังซูมและไล่สแกนใบหน้าขนาดเล็กจาก Google Drive (${allDrivePhotos.length} รูป)...`;
 
-            for (let photo of allPhotos) {
+            for (let photo of allDrivePhotos) {
                 try {
-                    const imgUrl = `/static/photos/${photo}`;
+                    const imgUrl = `https://docs.google.com/uc?export=view&id=${photo.id}`;
                     const currentImg = await faceapi.fetchImage(imgUrl);
                     
-                    // 💡 หัวใจสำคัญ: บังคับคำนวณขนาดภาพในมิติเดียวกัน ป้องกันปัญหารูปขนาดใหญ่เกินไปจนสแกนไม่ติด
+                    // 💡 ทีเด็ด: ขยาย inputSize เป็น 864 เพื่อให้ระบบจำลองภาพให้ละเอียดขึ้น 
+                    // และลด scoreThreshold เหลือ 0.2 เพื่อให้จับใบหน้าที่อยู่ไกลหรือหน้าเอียงในห้องสอบได้ครบ!
                     const detections = await faceapi.detectAllFaces(
                         currentImg, 
-                        new faceapi.SsdMobilenetv1Options({ minConfidence: 0.15 }) // เปิดเกณฑ์ให้กว้างขึ้นเพื่อส่องคนนั่งแถวหลัง
+                        new faceapi.TinyFaceDetectorOptions({ inputSize: 864, scoreThreshold: 0.2 })
                     ).withFaceLandmarks().withFaceDescriptors();
 
                     for (let d of detections) {
@@ -101,21 +103,21 @@
                             matchCount++;
                             const div = document.createElement('div');
                             div.className = 'bg-white p-2 rounded shadow transition hover:scale-105 duration-200';
-                            div.innerHTML = `<img src="${imgUrl}" class="rounded w-full h-auto object-cover aspect-square" alt="ผลลัพธ์">`;
+                            div.innerHTML = `<img src="${imgUrl}" class="rounded w-full h-auto object-cover aspect-square" crossorigin="anonymous">`;
                             gridPhotos.appendChild(div);
                             resultSection.classList.remove('hidden');
                             break; 
                         }
                     }
                 } catch (err) {
-                    console.log('ข้ามไฟล์รูปภาพชั่วคราว:', err);
+                    console.log('ข้ามการสแกนไฟล์ภาพในไดรฟ์ชั่วคราว:', err);
                 }
             }
 
             if (matchCount === 0) {
-                statusText.innerText = '❌ AI ตรวจค้นอย่างละเอียดแล้ว ไม่พบภาพใบหน้าของคุณในคลังระบบนี้ครับ';
+                statusText.innerText = '❌ AI ตรวจค้นอย่างละเอียดแล้ว ไม่พบภาพใบหน้าของคุณในโฟลเดอร์ Google Drive นี้ครับ';
             } else {
-                statusText.innerText = `🎉 สำเร็จ! AI ค้นพบรูปภาพที่มีใบหน้าของคุณรวมทั้งหมด ${matchCount} รูปครับ`;
+                statusText.innerText = `🎉 สำเร็จ! AI ค้นพบรูปภาพของคุณใน Google Drive ทั้งหมด ${matchCount} รูปครับ`;
             }
         });
 
