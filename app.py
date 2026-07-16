@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PHOTOS_DIR = os.path.join(BASE_DIR, 'static', 'photos')
 
 # รหัสโฟลเดอร์ Google Drive โรงเรียนของนาย
-GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHPp9ME88HVnhPdb'
+GOOGLE_DRIVE_FOLDER_ID = '1G3-i_p57ReBsRHzkZj4ID1YAdfjPLrbq'
 
 if not os.path.exists(PHOTOS_DIR):
     os.makedirs(PHOTOS_DIR, exist_ok=True)
