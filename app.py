@@ -9,7 +9,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PHOTOS_DIR = os.path.join(BASE_DIR, 'static', 'photos')
 
-# ⚠️ รหัสโฟลเดอร์ Google Drive โรงเรียนของนาย
+# รหัสโฟลเดอร์ Google Drive โรงเรียนของนาย
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHPp9ME88HVnhPdb'
 
 if not os.path.exists(PHOTOS_DIR):
@@ -43,7 +43,6 @@ def index():
             
             target_img = cv2.imread(temp_target_path)
             if target_img is not None:
-                # โหลดโมเดลผ่าน path สัมบูรณ์เพื่อความชัวร์บน Linux ของ Render
                 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
                 profile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
                 
