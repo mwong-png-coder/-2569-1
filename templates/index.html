@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบค้นหาภาพถ่ายกิจกรรมโรงเรียน</title>
-    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.3.4/dist/heic2any.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -70,7 +69,7 @@
                 
                 const loader = document.getElementById('loading-ai');
                 loader.className = "text-sm text-green-700 font-medium mb-4 bg-green-50 py-1.5 rounded-lg";
-                loader.innerText = '✅ ระบบ AI คลังรูปภาพ และโมเดล iPhone HEIC พร้อมใช้งาน!';
+                loader.innerText = '✅ ระบบ AI คลังรูปภาพ และระบบแปลงไฟล์ iPhone พร้อมใช้งาน!';
                 
                 document.getElementById('search_face').disabled = false;
                 document.getElementById('search-btn').disabled = false;
@@ -97,26 +96,28 @@
             resultSection.classList.add('hidden');
             gridPhotos.innerHTML = '';
 
-            let imageElementToScan;
+            let imageElementToScan = new Image();
 
-            // 📱 แปลงไฟล์ HEIC ของ iPhone เป็นรูปภาพที่แท้จริง
+            // 📱 ย้ายการแปลงไฟล์ HEIC ไปทำที่หลังบ้านผ่าน API ที่มีความเสถียรสูงกว่ามาก
             if (file.name.match(/\.(heic|heif)$/i)) {
-                statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) กำลังแปลงไฟล์ประมวลผลอัตโนมัติ...';
+                statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) กำลังส่งให้หลังบ้านแปลงไฟล์ออโต้...';
                 try {
-                    const convertedBlob = await heic2any({
-                        blob: file,
-                        toType: "image/jpeg",
-                        quality: 0.8
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const convertRes = await fetch('/api/convert-heic', {
+                        method: 'POST',
+                        body: formData
                     });
+                    const convertData = await convertRes.json();
                     
-                    // สร้างอ็อบเจกต์ภาพในระบบเพื่อป้อนให้ Face API แกะค่าได้โดยตรง
-                    const url = URL.createObjectURL(convertedBlob);
-                    imageElementToScan = new Image();
-                    imageElementToScan.src = url;
+                    if(convertData.error) throw new Error(convertData.error);
+                    
+                    imageElementToScan.src = convertData.base64;
                     await new Promise(resolve => imageElementToScan.onload = resolve);
                 } catch (heicErr) {
                     console.error("HEIC Error:", heicErr);
-                    statusText.innerText = '❌ ไม่สามารถแปลงไฟล์ภาพจาก iPhone ได้ กรุณาลองใช้ภาพอื่นหรือแคปหน้าจอนะครับ';
+                    statusText.innerText = '❌ ระบบหลังบ้านแปลงไฟล์ขัดข้อง กรุณาลองใช้นามสกุลอื่นชั่วคราวนะครับ';
                     return;
                 }
             } else {
