@@ -76,7 +76,7 @@
             }
 
             // ตั้งค่า Distance Threshold ไว้ที่ 0.60 (ถ้าค่าต่ำกว่านี้คือคนเดียวกัน ยิ่งค่าน้อยยิ่งแม่นยำสูง)
-            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.60);
+            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.40);
             let matchCount = 0;
 
             statusText.innerText = `🔄 AI บนคอมพิวเตอร์กำลังไล่สแกนใบหน้าทีละรูปในคลังภาพ (${allPhotos.length} รูป)...`;
