@@ -30,25 +30,26 @@
     </div>
 
     <script>
+        // ใช้ Model URL สำรองที่เสถียรและโหลดไว
         const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
         let allPhotos = [];
 
-        // 1. ปลุกระบบและโหลดโมเดล AI ตรวจสอบใบหน้าเชิงลึก
+        // 1. เปลี่ยนมาดาวน์โหลดโมเดล TinyFaceDetector แทน SSD
         async function initAI() {
             try {
-                await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+                document.getElementById('loading-ai').innerText = '⏳ กำลังดาวน์โหลดสมองกล AI ขนาดเล็กพิเศษ...';
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
                 
-                document.getElementById('loading-ai').innerText = '✅ ตัวจับใบหน้า AI บนหน้าเว็บพร้อมลุยแล้ว!';
+                document.getElementById('loading-ai').innerText = '✅ ตัวจับใบหน้า Tiny AI บนเบราว์เซอร์พร้อมลุยแล้ว!';
                 document.getElementById('search_face').disabled = false;
                 document.getElementById('search-btn').disabled = false;
 
-                // ดึงรายชื่อไฟล์รูปภาพจากฝั่งเซิร์ฟเวอร์มารอประมวลผล
                 const res = await fetch('/api/photos');
                 allPhotos = await res.json();
             } catch (e) {
-                document.getElementById('loading-ai').innerText = '❌ โหลดโมเดล AI ผิดพลาด กรุณากดรีเฟรชหน้าจออีกครั้ง';
+                document.getElementById('loading-ai').innerText = '❌ โหลดโมเดลล้มเหลว กรุณารีเฟรชหน้าเว็บอีกครั้งครับ';
             }
         }
 
@@ -64,35 +65,40 @@
             resultSection.classList.add('hidden');
             gridPhotos.innerHTML = '';
 
-            statusText.innerText = '⏳ AI กำลังสกัดโครงสร้างใบหน้าต้นฉบับของคุณ...';
+            statusText.innerText = '⏳ AI กำลังอ่านพิกัด 68 จุดเด่นบนใบหน้าต้นฉบับของคุณ...';
             
-            // 2. แปลงไฟล์รูปภาพที่อัปโหลดให้กลายเป็นเวกเตอร์รหัสใบหน้า (สแกนแบบ 68 จุดเด่นบนใบหน้า)
             const targetImg = await faceapi.bufferToImage(fileInput.files[0]);
-            const targetDetection = await faceapi.detectSingleFace(targetImg).withFaceLandmarks().withFaceDescriptor();
+            
+            // ใช้ Tiny Face Detector สแกนรูปเป้าหมายที่เราอัปโหลดเข้าไป
+            const targetDetection = await faceapi.detectSingleFace(
+                targetImg, 
+                new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
+            ).withFaceLandmarks().withFaceDescriptor();
 
             if (!targetDetection) {
-                statusText.innerText = '❌ AI ตรวจไม่พบใบหน้าคนในรูปภาพนี้เลยครับ กรุณาเปลี่ยนเป็นรูปที่เห็นตาจมูกปากชัดเจนขึ้น';
+                statusText.innerText = '❌ AI อ่านใบหน้าต้นฉบับไม่สำเร็จ กรุณาใช้รูปที่เห็นใบหน้าตรงและชัดเจนขึ้นเพื่อเป็นหัวเชื้อครับ';
                 return;
             }
 
-            // ตั้งค่า Distance Threshold ไว้ที่ 0.60 (ถ้าค่าต่ำกว่านี้คือคนเดียวกัน ยิ่งค่าน้อยยิ่งแม่นยำสูง)
-            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.40);
+            // 🎯 กำหนดความเป๊ะไว้ที่ 0.45 (บาลานซ์ที่ดีที่สุดของ Tiny Face: ไม่มั่ว และหลุดยาก)
+            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.45);
             let matchCount = 0;
 
-            statusText.innerText = `🔄 AI บนคอมพิวเตอร์กำลังไล่สแกนใบหน้าทีละรูปในคลังภาพ (${allPhotos.length} รูป)...`;
+            statusText.innerText = `🔄 Tiny AI กำลังค้นหาเจาะลึกรูปภาพในคลัง (${allPhotos.length} รูป)...`;
 
-            // 3. เริ่มทำการรัน AI บนเบราว์เซอร์ เพื่อแสกนหาใบหน้าในคลังรูปถ่ายกิจกรรมทั้งหมด
             for (let photo of allPhotos) {
                 try {
                     const imgUrl = `/static/photos/${photo}`;
                     const currentImg = await faceapi.fetchImage(imgUrl);
                     
-                    // สแกนทุกใบหน้าทีละจุดที่เจอในรูปกิจกรรมนั้นๆ (ต่อให้หันข้างหรือหน้าเอียง ระบบก็จะพยายามตรวจจับโครงสร้าง)
-                    const detections = await faceapi.detectAllFaces(currentImg).withFaceLandmarks().withFaceDescriptors();
+                    // 💡 ทีเด็ด: ใช้ inputSize: 608 เพื่อเพิ่มความละเอียดสูงสุดในการส่องใบหน้าขนาดเล็กที่นั่งสอบอยู่แถวหลัง!
+                    const detections = await faceapi.detectAllFaces(
+                        currentImg, 
+                        new faceapi.TinyFaceDetectorOptions({ inputSize: 608, scoreThreshold: 0.3 })
+                    ).withFaceLandmarks().withFaceDescriptors();
 
                     for (let d of detections) {
                         const match = faceMatcher.findBestMatch(d.descriptor);
-                        // ถ้า AI ยืนยันว่าหน้าตรงกันและไม่ใช่บุคคลนิรนาม (unknown)
                         if (match.label !== 'unknown') {
                             matchCount++;
                             const div = document.createElement('div');
@@ -104,18 +110,16 @@
                         }
                     }
                 } catch (err) {
-                    console.log('ข้ามไฟล์ที่เข้าถึงไม่ได้ชั่วคราว:', err);
+                    console.log('ข้ามไฟล์ชั่วคราว:', err);
                 }
             }
 
             if (matchCount === 0) {
-                statusText.innerText = '❌ AI ตรวจค้นจนครบแล้ว ไม่พบภาพใบหน้าของนายในคลังระบบนี้ครับ';
+                statusText.innerText = '❌ AI ตรวจค้นแบบเจาะลึกครบแล้ว ไม่พบภาพใบหน้าของนายในคลังระบบนี้ครับ';
             } else {
-                statusText.innerText = `🎉 ยอดเยี่ยม! AI ค้นพบรูปภาพใบหน้าของนายทั้งหมด ${matchCount} รูปครับ`;
+                statusText.innerText = `🎉 ค้นหาเสร็จสิ้น! AI ตรวจพบรูปภาพที่มีใบหน้าของนายทั้งหมด ${matchCount} รูปครับ`;
             }
         });
 
         window.onload = initAI;
     </script>
-</body>
-</html>
