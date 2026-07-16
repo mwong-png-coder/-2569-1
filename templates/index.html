@@ -15,7 +15,7 @@
             <h1 class="text-xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
                 📸 ค้นหารูปภาพโรงเรียนด้วยใบหน้า
             </h1>
-            <p class="text-xs text-gray-500 mb-4">⚙️ โหมดพิเศษ: เจาะหาใบหน้าขนาดเล็กและรอบรับไฟล์ iPhone</p>
+            <p class="text-xs text-gray-500 mb-4">⚙️ โหมดพิเศษ: เจาะหาใบหน้าขนาดเล็กและรองรับไฟล์ iPhone</p>
             
             <p id="loading-ai" class="text-sm text-amber-600 font-medium mb-4 bg-amber-50 py-1.5 rounded-lg">
                 ⏳ ระบบกำลังเตรียมความพร้อมของ AI และคลังรูปภาพ...
@@ -51,7 +51,6 @@
         const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
         let allDrivePhotos = [];
 
-        // แสดงชื่อไฟล์ที่เลือกให้เช็คได้ง่ายขึ้น
         document.getElementById('search_face').addEventListener('change', (e) => {
             const nameDisplay = document.getElementById('file-name-text');
             if(e.target.files.length > 0) {
@@ -63,7 +62,6 @@
             }
         });
 
-        // 1. เปิดระบบโมเดล AI และดึงคลังรูป Base64 มารอ
         async function initAI() {
             try {
                 await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
@@ -79,16 +77,13 @@
 
                 const res = await fetch('/api/photos');
                 allDrivePhotos = await res.json();
-                console.log("คลังภาพโหลดพร้อมสแกน:", allDrivePhotos.length);
             } catch (e) {
                 const loader = document.getElementById('loading-ai');
                 loader.className = "text-sm text-red-700 font-medium mb-4 bg-red-50 py-1.5 rounded-lg";
                 loader.innerText = '❌ โหลดระบบล้มเหลว กรุณารีเฟรชหน้าเว็บอีกครั้งครับ';
-                console.error(e);
             }
         }
 
-        // 2. ระบบคำนวณสแกนใบหน้าต้นฉบับและแปลงไฟล์ HEIC
         document.getElementById('search-btn').addEventListener('click', async () => {
             const fileInput = document.getElementById('search_face');
             if (!fileInput.files.length) return alert('กรุณาเลือกไฟล์ภาพถ่ายใบหน้าก่อนครับนาย');
@@ -102,7 +97,9 @@
             resultSection.classList.add('hidden');
             gridPhotos.innerHTML = '';
 
-            // 📱 🎯 แก้ไขคำสั่งตรวจสอบภาพ iPhone .HEIC / .HEIF ให้เสถียรและทำงานถูกต้อง
+            let imageElementToScan;
+
+            // 📱 แปลงไฟล์ HEIC ของ iPhone เป็นรูปภาพที่แท้จริง
             if (file.name.match(/\.(heic|heif)$/i)) {
                 statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) กำลังแปลงไฟล์ประมวลผลอัตโนมัติ...';
                 try {
@@ -111,19 +108,26 @@
                         toType: "image/jpeg",
                         quality: 0.8
                     });
-                    file = convertedBlob;
+                    
+                    // สร้างอ็อบเจกต์ภาพในระบบเพื่อป้อนให้ Face API แกะค่าได้โดยตรง
+                    const url = URL.createObjectURL(convertedBlob);
+                    imageElementToScan = new Image();
+                    imageElementToScan.src = url;
+                    await new Promise(resolve => imageElementToScan.onload = resolve);
                 } catch (heicErr) {
                     console.error("HEIC Error:", heicErr);
-                    statusText.innerText = '❌ ไม่สามารถแปลงไฟล์ภาพจาก iPhone ได้ กรุณาลองใช้ภาพอื่นนะครับ';
+                    statusText.innerText = '❌ ไม่สามารถแปลงไฟล์ภาพจาก iPhone ได้ กรุณาลองใช้ภาพอื่นหรือแคปหน้าจอนะครับ';
                     return;
                 }
+            } else {
+                // สำหรับไฟล์ภาพปกติ (.jpg, .png)
+                imageElementToScan = await faceapi.bufferToImage(file);
             }
 
             statusText.innerText = '⏳ AI กำลังถอดรหัสเวกเตอร์ใบหน้าต้นฉบับของคุณ...';
             
-            const targetImg = await faceapi.bufferToImage(file);
             const targetDetection = await faceapi.detectSingleFace(
-                targetImg, 
+                imageElementToScan, 
                 new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 })
             ).withFaceLandmarks().withFaceDescriptor();
 
@@ -132,11 +136,10 @@
                 return;
             }
 
-            // บาลานซ์ Threshold ที่ 0.55 เพื่อความแม่นยำสูงสุด
             const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.55);
             let matchCount = 0;
 
-            statusText.innerText = `🔄 Tiny AI กำลังขยายขนาดพิกเซลและเจาะค้นหาภาพในคลัง (${allDrivePhotos.length} รูป)...`;
+            statusText.innerText = `🔄 Tiny AI กำลังซูมและเจาะค้นหาภาพในคลัง (${allDrivePhotos.length} รูป)...`;
 
             for (let photo of allDrivePhotos) {
                 try {
@@ -144,7 +147,6 @@
                     currentImg.src = photo.base64;
                     await new Promise(resolve => currentImg.onload = resolve);
                     
-                    // ตั้งค่าขยายภาพขนาดยักษ์ inputSize: 864 เพื่อส่องหาใบหน้าเล็กๆ ที่อยู่ลึกในห้องสอบ
                     const detections = await faceapi.detectAllFaces(
                         currentImg, 
                         new faceapi.TinyFaceDetectorOptions({ inputSize: 864, scoreThreshold: 0.2 })
@@ -163,7 +165,7 @@
                         }
                     }
                 } catch (err) {
-                    console.log('ข้ามไฟล์ภาพที่มีปัญหา:', err);
+                    console.log('ข้ามไฟล์ภาพบางรูป:', err);
                 }
             }
 
