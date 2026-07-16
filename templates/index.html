@@ -1,56 +1,91 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sports Day Photo Finder</title>
-    <!-- เรียกใช้ Tailwind CSS ช่วยให้หน้าเว็บสวยทันทีโดยไม่ต้องเขียนสไตล์แยก -->
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+import os
+import cv2
+import gdown
+import numpy as np
+from flask import Flask, render_template, request
 
-    <div class="max-w-4xl mx-auto px-4 py-12">
-        <!-- หัวข้อหลัก -->
-        <div class="text-center mb-10">
-            <h1 class="text-4xl font-black text-orange-500 mb-3">🏃‍♂️ Sports Day Photo Finder</h1>
-            <p class="text-slate-500 text-lg">งานกีฬาสีตามหารูปยากใช่ไหม? อัปโหลดหน้าตัวเองแล้วปล่อยให้ AI หาให้เลย!</p>
-        </div>
+app = Flask(__name__)
 
-        <!-- กล่องอัปโหลดรูปภาพ -->
-        <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-100 max-w-md mx-auto mb-12">
-            <form action="/" method="POST" enctype="multipart/form-data" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-2">📸 รูปถ่ายหน้าตรงของคุณ (เห็นชัด ไม่ย้อนแสง)</label>
-                    <input type="file" name="search_face" accept="image/*" required
-                        class="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 cursor-pointer"/>
-                </div>
-                <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-xl transition duration-200 shadow-sm">
-                    🔍 เริ่มสแกนหารูปภาพของฉัน
-                </button>
-            </form>
-        </div>
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PHOTOS_DIR = os.path.join(BASE_DIR, 'static', 'photos')
 
-        <!-- ส่วนแสดงผลลัพธ์รูปภาพที่สแกนเจอ -->
-        <div class="border-t border-slate-200 pt-8">
-            <h2 class="text-2xl font-bold mb-6 text-center text-slate-700">✨ รูปถ่ายกีฬาสีที่มีคุณ ✨</h2>
+# ⚠️ ใส่ ID โฟลเดอร์ Google Drive โรงเรียนของนายตรงนี้
+GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHPp9ME88HVnhPdb'
+
+if not os.path.exists(PHOTOS_DIR):
+    os.makedirs(PHOTOS_DIR, exist_ok=True)
+
+def sync_photos_from_drive():
+    """ฟังก์ชันมุดเข้าไปดึงไฟล์รูปภาพจาก Google Drive ทุกโฟลเดอร์ย่อย"""
+    if GOOGLE_DRIVE_FOLDER_ID:
+        try:
+            print("🔄 กำลังดึงรูปภาพแบบมุดทุกโฟลเดอร์ย่อยจาก Google Drive...")
+            gdown.download_folder(id=GOOGLE_DRIVE_FOLDER_ID, output=PHOTOS_DIR, quiet=True, remaining_ok=True)
             
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
-                <!-- วนลูปแสดงรูปภาพที่ AI หาเจอจาก Flask Backend -->
-                {% for photo in matched_photos %}
-                <div class="overflow-hidden rounded-2xl shadow-sm bg-white border border-slate-100 group">
-                    <img src="{{ url_for('static', filename='photos/' + photo) }}" class="w-full h-56 object-cover group-hover:scale-105 transition duration-300" alt="รูปภาพกีฬาสี">
-                    <div class="p-3 text-center bg-slate-50 border-t border-slate-100">
-                        <a href="{{ url_for('static', filename='photos/' + photo) }}" download class="text-orange-500 hover:text-orange-600 font-bold text-sm">💾 ดาวน์โหลดรูปภาพ</a>
-                    </div>
-                </div>
-                {% else %}
-                <div class="col-span-full text-center text-slate-400 py-12 bg-white rounded-2xl border border-dashed border-slate-200">
-                    ยังไม่มีการค้นหา หรือ ไม่พบรูปภาพใบหน้าของคุณในระบบคลังรูปภาพ
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
+            total_files = 0
+            for r, d, f in os.walk(PHOTOS_DIR):
+                total_files += len([file for file in f if file.lower().endswith(('.png', '.jpg', '.jpeg'))])
+            print(f"✅ ซิงค์เสร็จสิ้น! พบรูปภาพในคลังทั้งหมด: {total_files} รูป")
+        except Exception as e:
+            print(f"❌ เกิดข้อผิดพลาดในการดึงรูปภาพ: {e}")
 
-</body>
-</html>
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'GET':
+        sync_photos_from_drive()
+        
+    matched_photos = []
+    
+    if request.method == 'POST':
+        file = request.files.get('search_face')
+        if file and file.filename != '':
+            temp_target_path = os.path.join(BASE_DIR, 'temp_target.jpg')
+            file.save(temp_target_path)
+            
+            target_img = cv2.imread(temp_target_path)
+            if target_img is not None:
+                # 💡 ใช้โมเดล OpenCV ในตัวระบบที่โหลดเร็วและเบา (หน้าตรง + หน้าเอียง)
+                face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                profile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
+                
+                # ทำการคำนวณโครงสร้างแสงสีของภาพต้นฉบับไว้เทียบกรณีหน้าเอียงมากๆ
+                target_hist = cv2.calcHist([target_img], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+                cv2.normalize(target_hist, target_hist, 0, 1, cv2.NORM_MINMAX)
+                
+                if os.path.exists(PHOTOS_DIR):
+                    # มุดค้นหาทุกโฟลเดอร์ย่อยที่แตกแขนง (os.walk)
+                    for root, dirs, files in os.walk(PHOTOS_DIR):
+                        for filename in files:
+                            if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                                file_path = os.path.join(root, filename)
+                                try:
+                                    current_img = cv2.imread(file_path)
+                                    if current_img is not None:
+                                        gray_current = cv2.cvtColor(current_img, cv2.COLOR_BGR2GRAY)
+                                        
+                                        # 1. สแกนหาหน้าตรง
+                                        faces = face_cascade.detectMultiScale(gray_current, 1.1, 4)
+                                        # 2. สแกนหาหน้าเอียง/ข้าง เพิ่มเติม
+                                        profiles = profile_cascade.detectMultiScale(gray_current, 1.1, 4)
+                                        
+                                        # 3. เทียบเคียงค่าสีภาพ (ช่วยกรณีแสงเปลี่ยน/มุมกล้องเดียวกัน)
+                                        current_hist = cv2.calcHist([current_img], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+                                        cv2.normalize(current_hist, current_hist, 0, 1, cv2.NORM_MINMAX)
+                                        similarity = cv2.compareHist(target_hist, current_hist, cv2.HISTCMP_CORREL)
+                                        
+                                        # ถ้าตรวจพบใบหน้า (หน้าตรง หรือ หน้าเอียง) หรือภาพมีความคล้ายคลึงของโทนสีสูง ให้ดึงออกมาโชว์
+                                        if len(faces) > 0 or len(profiles) > 0 or similarity > 0.65:
+                                            # ตัด Path ส่งไปหน้าเว็บเพื่อไม่ให้ติดปัญหารหัสภาษาไทยของโฟลเดอร์หลัก
+                                            web_path = os.path.relpath(file_path, PHOTOS_DIR).replace('\\', '/')
+                                            if web_path not in matched_photos:
+                                                matched_photos.append(web_path)
+                                except Exception as e:
+                                    pass
+            
+            if os.path.exists(temp_target_path):
+                os.remove(temp_target_path)
+                            
+    return render_template('index.html', matched_photos=matched_photos)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', debug=True, port=5000)
