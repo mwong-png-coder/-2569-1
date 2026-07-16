@@ -3,36 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบค้นหาภาพถ่ายใบหน้า</title>
+    <title>ระบบ AI ค้นหาภาพถ่ายใบหน้าแม่นยำสูง</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 </head>
 <body class="bg-gray-100 font-sans">
-    <div class="max-w-2xl mx-auto py-10 px-4">
+    <div class="max-w-3xl mx-auto py-10 px-4">
         <div class="bg-white p-6 rounded-lg shadow-md text-center">
-            <h1 class="text-2xl font-bold text-gray-800 mb-6">📸 ค้นหารูปภาพโรงเรียนด้วยใบหน้า</h1>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">📸 ระบบ AI ค้นหารูปภาพด้วยใบหน้า</h1>
+            <p class="text-sm text-gray-500 mb-6">⚙️ โหมดพิเศษ: เอียงคอ หันข้าง หรือเห็นหน้าครึ่งซีกก็หาเจอ</p>
             
-            <form action="/" method="POST" enctype="multipart/form-data" class="space-y-4">
-                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
-                    <input type="file" name="search_face" accept="image/*" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
-                </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition">🔍 เริ่มค้นหาใบหน้า</button>
-            </form>
+            <div id="loading-ai" class="mb-4 text-blue-600 font-medium">⏳ กำลังเตรียมความพร้อมระบบ AI บนเบราว์เซอร์...</div>
+
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 mb-4">
+                <input type="file" id="search_face" accept="image/*" disabled class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+            </div>
+            <button id="search-btn" disabled class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition disabled:bg-gray-400">🔍 เริ่มให้ AI สแกนค้นหาใบหน้า</button>
         </div>
 
-        {% if matched_photos %}
-        <div class="mt-10">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">✨ พบรูปภาพของคุณในกิจกรรม:</h2>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {% for photo in matched_photos %}
-                <div class="bg-white p-2 rounded shadow">
-                    <img src="{{ url_for('static', filename='photos/' + photo) }}" class="rounded w-full h-auto object-cover aspect-square">
-                </div>
-                {% endfor %}
-            </div>
+        <div id="status-text" class="text-center text-gray-600 mt-6 hidden"></div>
+
+        <div id="result-section" class="mt-10 hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">✨ พบรูปภาพของคุณในกิจกรรม (วิเคราะห์ด้วย AI):</h2>
+            <div id="grid-photos" class="grid grid-cols-2 md:grid-cols-3 gap-4"></div>
         </div>
-        {% elif request.method == 'POST' %}
-        <p class="text-center text-gray-500 mt-10">❌ ไม่พบภาพใบหน้าของคุณในคลังระบบ</p>
-        {% endif %}
     </div>
+
+    <script>
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        let allPhotos = [];
+
+        // 1. ปลุกระบบและโหลดโมเดล AI ตรวจสอบใบหน้าเชิงลึก
+        async function initAI() {
+            try {
+                await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+                
+                document.getElementById('loading-ai').innerText = '✅ ตัวจับใบหน้า AI บนหน้าเว็บพร้อมลุยแล้ว!';
+                document.getElementById('search_face').disabled = false;
+                document.getElementById('search-btn').disabled = false;
+
+                // ดึงรายชื่อไฟล์รูปภาพจากฝั่งเซิร์ฟเวอร์มารอประมวลผล
+                const res = await fetch('/api/photos');
+                allPhotos = await res.json();
+            } catch (e) {
+                document.getElementById('loading-ai').innerText = '❌ โหลดโมเดล AI ผิดพลาด กรุณากดรีเฟรชหน้าจออีกครั้ง';
+            }
+        }
+
+        document.getElementById('search-btn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('search_face');
+            if (!fileInput.files.length) return alert('กรุณาเลือกไฟล์ภาพถ่ายใบหน้าก่อนครับนาย');
+
+            const statusText = document.getElementById('status-text');
+            const gridPhotos = document.getElementById('grid-photos');
+            const resultSection = document.getElementById('result-section');
+
+            statusText.classList.remove('hidden');
+            resultSection.classList.add('hidden');
+            gridPhotos.innerHTML = '';
+
+            statusText.innerText = '⏳ AI กำลังสกัดโครงสร้างใบหน้าต้นฉบับของคุณ...';
+            
+            // 2. แปลงไฟล์รูปภาพที่อัปโหลดให้กลายเป็นเวกเตอร์รหัสใบหน้า (สแกนแบบ 68 จุดเด่นบนใบหน้า)
+            const targetImg = await faceapi.bufferToImage(fileInput.files[0]);
+            const targetDetection = await faceapi.detectSingleFace(targetImg).withFaceLandmarks().withFaceDescriptor();
+
+            if (!targetDetection) {
+                statusText.innerText = '❌ AI ตรวจไม่พบใบหน้าคนในรูปภาพนี้เลยครับ กรุณาเปลี่ยนเป็นรูปที่เห็นตาจมูกปากชัดเจนขึ้น';
+                return;
+            }
+
+            // ตั้งค่า Distance Threshold ไว้ที่ 0.60 (ถ้าค่าต่ำกว่านี้คือคนเดียวกัน ยิ่งค่าน้อยยิ่งแม่นยำสูง)
+            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.60);
+            let matchCount = 0;
+
+            statusText.innerText = `🔄 AI บนคอมพิวเตอร์กำลังไล่สแกนใบหน้าทีละรูปในคลังภาพ (${allPhotos.length} รูป)...`;
+
+            // 3. เริ่มทำการรัน AI บนเบราว์เซอร์ เพื่อแสกนหาใบหน้าในคลังรูปถ่ายกิจกรรมทั้งหมด
+            for (let photo of allPhotos) {
+                try {
+                    const imgUrl = `/static/photos/${photo}`;
+                    const currentImg = await faceapi.fetchImage(imgUrl);
+                    
+                    // สแกนทุกใบหน้าทีละจุดที่เจอในรูปกิจกรรมนั้นๆ (ต่อให้หันข้างหรือหน้าเอียง ระบบก็จะพยายามตรวจจับโครงสร้าง)
+                    const detections = await faceapi.detectAllFaces(currentImg).withFaceLandmarks().withFaceDescriptors();
+
+                    for (let d of detections) {
+                        const match = faceMatcher.findBestMatch(d.descriptor);
+                        // ถ้า AI ยืนยันว่าหน้าตรงกันและไม่ใช่บุคคลนิรนาม (unknown)
+                        if (match.label !== 'unknown') {
+                            matchCount++;
+                            const div = document.createElement('div');
+                            div.className = 'bg-white p-2 rounded shadow';
+                            div.innerHTML = `<img src="${imgUrl}" class="rounded w-full h-auto object-cover aspect-square" alt="ผลลัพธ์คัดกรอง">`;
+                            gridPhotos.appendChild(div);
+                            resultSection.classList.remove('hidden');
+                            break;
+                        }
+                    }
+                } catch (err) {
+                    console.log('ข้ามไฟล์ที่เข้าถึงไม่ได้ชั่วคราว:', err);
+                }
+            }
+
+            if (matchCount === 0) {
+                statusText.innerText = '❌ AI ตรวจค้นจนครบแล้ว ไม่พบภาพใบหน้าของนายในคลังระบบนี้ครับ';
+            } else {
+                statusText.innerText = `🎉 ยอดเยี่ยม! AI ค้นพบรูปภาพใบหน้าของนายทั้งหมด ${matchCount} รูปครับ`;
+            }
+        });
+
+        window.onload = initAI;
+    </script>
 </body>
 </html>
