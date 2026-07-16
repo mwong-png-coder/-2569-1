@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบค้นหาภาพถ่ายกิจกรรมโรงเรียน</title>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.3.4/dist/heic2any.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -69,7 +70,7 @@
                 
                 const loader = document.getElementById('loading-ai');
                 loader.className = "text-sm text-green-700 font-medium mb-4 bg-green-50 py-1.5 rounded-lg";
-                loader.innerText = '✅ ระบบ AI คลังรูปภาพ และระบบแปลงไฟล์ iPhone พร้อมใช้งาน!';
+                loader.innerText = '✅ ระบบ AI คลังรูปภาพ และโมเดล iPhone HEIC พร้อมใช้งาน!';
                 
                 document.getElementById('search_face').disabled = false;
                 document.getElementById('search-btn').disabled = false;
@@ -98,31 +99,37 @@
 
             let imageElementToScan = new Image();
 
-            // 📱 ย้ายการแปลงไฟล์ HEIC ไปทำที่หลังบ้านผ่าน API ที่มีความเสถียรสูงกว่ามาก
+            // 📱 ตรวจจับและแปลงไฟล์รูป iPhone (HEIC) บนฝั่งหน้าบ้านด้วยโครงสร้างที่ปลอดภัย
             if (file.name.match(/\.(heic|heif)$/i)) {
-                statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) กำลังส่งให้หลังบ้านแปลงไฟล์ออโต้...';
+                statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) กำลังแกะข้อมูลพิกเซลหน้าบ้าน...';
                 try {
-                    const formData = new FormData();
-                    formData.append('file', file);
-
-                    const convertRes = await fetch('/api/convert-heic', {
-                        method: 'POST',
-                        body: formData
+                    const convertedBlob = await heic2any({
+                        blob: file,
+                        toType: "image/jpeg",
+                        quality: 0.7
                     });
-                    const convertData = await convertRes.json();
                     
-                    if(convertData.error) throw new Error(convertData.error);
+                    // แปลง Blob เป็น Data URL เพื่อให้แท็ก Image ดึงไปใช้ได้อย่างไม่มีข้อผิดพลาด
+                    const reader = new FileReader();
+                    const loadPromise = new Promise(resolve => reader.onload = resolve);
+                    reader.readAsDataURL(convertedBlob);
+                    await loadPromise;
                     
-                    imageElementToScan.src = convertData.base64;
+                    imageElementToScan.src = reader.result;
                     await new Promise(resolve => imageElementToScan.onload = resolve);
                 } catch (heicErr) {
                     console.error("HEIC Error:", heicErr);
-                    statusText.innerText = '❌ ระบบหลังบ้านแปลงไฟล์ขัดข้อง กรุณาลองใช้นามสกุลอื่นชั่วคราวนะครับ';
+                    statusText.innerText = '❌ เกิดข้อผิดพลาดในการอ่านรูป iPhone กรุณาลองเลือกรูปภาพนี้ใหม่อีกครั้งครับ';
                     return;
                 }
             } else {
-                // สำหรับไฟล์ภาพปกติ (.jpg, .png)
-                imageElementToScan = await faceapi.bufferToImage(file);
+                // สำหรับไฟล์ภาพทั่วไป JPG, PNG
+                const reader = new FileReader();
+                const loadPromise = new Promise(resolve => reader.onload = resolve);
+                reader.readAsDataURL(file);
+                await loadPromise;
+                imageElementToScan.src = reader.result;
+                await new Promise(resolve => imageElementToScan.onload = resolve);
             }
 
             statusText.innerText = '⏳ AI กำลังถอดรหัสเวกเตอร์ใบหน้าต้นฉบับของคุณ...';
@@ -140,7 +147,7 @@
             const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.55);
             let matchCount = 0;
 
-            statusText.innerText = `🔄 Tiny AI กำลังซูมและเจาะค้นหาภาพในคลัง (${allDrivePhotos.length} รูป)...`;
+            statusText.innerText = `🔄 Tiny AI กำลังขยายพิกเซลและเจาะค้นหาภาพในคลัง (${allDrivePhotos.length} รูป)...`;
 
             for (let photo of allDrivePhotos) {
                 try {

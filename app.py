@@ -1,16 +1,11 @@
 import os
 import requests
 import base64
-import io
-from flask import Flask, render_template, jsonify, request
-from PIL import Image
-from pillow_heif import register_heif_opener
-
-# ลงทะเบียนให้ Pillow รู้จักและเปิดอ่านไฟล์ HEIC ของ iPhone ได้
-register_heif_opener()
+from flask import Flask, render_template, jsonify
 
 app = Flask(__name__)
 
+# ไอดีโฟลเดอร์เก็บภาพกิจกรรม
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
 
 @app.route('/')
@@ -43,28 +38,6 @@ def get_photos():
     except Exception as e:
         print(f"❌ Error: {e}")
         return jsonify([])
-
-@app.route('/api/convert-heic', methods=['POST'])
-def convert_heic():
-    """รับไฟล์ HEIC จาก iPhone แปลงเป็น JPG ความเร็วสูงแล้วส่งกลับทันที"""
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file found'}), 400
-            
-        file = request.files['file']
-        image = Image.open(file)
-        
-        # แปลงไฟล์ภาพในหน่วยความจำ (Memory) เป็น JPG
-        output = io.BytesIO()
-        image.convert("RGB").save(output, format="JPEG", quality=80)
-        output.seek(0)
-        
-        # แปลงเป็น Base64 ส่งคืนหน้าบ้านไปใช้สแกนใบหน้าได้เลย
-        encoded_img = base64.b64encode(output.read()).decode('utf-8')
-        return jsonify({'base64': f"data:image/jpeg;base64,{encoded_img}"})
-    except Exception as e:
-        print(f"❌ HEIC Conversion Error: {e}")
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
