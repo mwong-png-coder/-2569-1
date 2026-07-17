@@ -11,7 +11,7 @@ register_heif_opener()
 
 app = Flask(__name__)
 
-# ไอดีโฟลเดอร์ Google Drive ของนาย
+# ไอดีโฟลเดอร์ Google Drive ของนาย (ความยาว 28 ตัวอักษร)
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
 
 @app.route('/')
@@ -21,7 +21,7 @@ def index():
 @app.route('/api/photos')
 def get_photos():
     try:
-        # ดึงหน้าเว็บแชร์สาธารณะของ Google Drive (วิธีนี้เลี่ยงการใช้ API Key ได้ 100%)
+        # เข้าถึงหน้าเว็บแสดงผลไฟล์ของโฟลเดอร์โดยตรง
         folder_url = f"https://drive.google.com/embeddedfolderview?id={GOOGLE_DRIVE_FOLDER_ID}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -29,22 +29,23 @@ def get_photos():
         response = requests.get(folder_url, headers=headers)
         
         if response.status_code != 200:
-            print(f"❌ ไม่สามารถดึงหน้าเว็บโฟลเดอร์ได้: {response.status_code}")
+            print(f"❌ ดึงข้อมูลโฟลเดอร์ขัดข้อง: {response.status_code}")
             return jsonify([])
 
-        # ใช้ Regex ค้นหารหัส File ID ของรูปภาพทั้งหมดที่ซ่อนอยู่ในหน้าเว็บ
-        # ปกติไฟล์ใน Google Drive จะมี ID ความยาว 33 ตัวอักษรประกอบด้วยตัวอักษรและตัวเลข
-        file_ids = list(set(re.findall(r'\"id\":\"([a-zA-Z0-9_-]{33})\"', response.text)))
+        # ปรับแก้ Regex: รองรับความยาวของ Google Drive File ID ตั้งแต่ 25 ถึง 35 ตัวอักษร (แก้ปัญหาค้นหาไม่เจอ)
+        raw_ids = re.findall(r'\"id\":\"([a-zA-Z0-9_-]{25,35})\"', response.text)
         
-        # ป้องกันกรณีแพทเทิร์น ID ยาวต่างกัน (มองหารูปแบบดึงไฟล์ทั่วไป)
-        if not file_ids:
-            file_ids = list(set(re.findall(r'id=([a-zA-Z0-9_-]{25,})', response.text)))
-
+        # ค้นหาเพิ่มเติมในโครงสร้างสำรอง
+        if not raw_ids:
+            raw_ids = re.findall(r'id=([a-zA-Z0-9_-]{25,35})', response.text)
+            
+        file_ids = list(set(raw_ids))
         photo_data_list = []
-        print(f"🔍 ตรวจพบไฟล์ดิบในไดรฟ์ของนาย: {len(file_ids)} ไฟล์ กำลังแปลงพิกเซล...")
+        
+        print(f"🔍 ตรวจพบไอดีที่น่าจะเป็นไฟล์รูปภาพ: {len(file_ids)} รายการ")
 
         for file_id in file_ids:
-            # ข้าม ID โฟลเดอร์ตัวเอง
+            # ข้ามไอดีของโฟลเดอร์หลัก
             if file_id == GOOGLE_DRIVE_FOLDER_ID:
                 continue
                 
@@ -53,9 +54,9 @@ def get_photos():
             
             if img_resp.status_code == 200:
                 try:
-                    # โหลดและแปลงไฟล์ภาพ
+                    # ทดสอบเปิดไฟล์เพื่อกรองเอาเฉพาะไฟล์ที่เป็นรูปภาพจริง ๆ
                     img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
-                    img.thumbnail((600, 600))  # บีบพิกเซลให้เบาลงเพื่อสแกนเร็วขึ้น
+                    img.thumbnail((600, 600))  # ย่อขนาดรูปภาพเพื่อลดปริมาณการส่งข้อมูลและทำให้ AI สแกนพิกเซลเร็วขึ้น
                     
                     output = io.BytesIO()
                     img.save(output, format="JPEG", quality=80)
@@ -66,15 +67,16 @@ def get_photos():
                         "name": f"drive_image_{file_id[:6]}.jpg",
                         "base64": f"data:image/jpeg;base64,{encoded_img}"
                     })
-                except Exception as ex:
-                    # ข้ามไฟล์ที่ไม่ใช่รูปภาพ (เช่น ไฟล์เอกสารอื่นๆ ในไดรฟ์)
+                    print(f"✔️ โหลดและย่อรูปภาพสำเร็จ: {file_id}")
+                except Exception:
+                    # ข้ามไฟล์ที่ไม่ใช่รูปภาพโดยอัตโนมัติ
                     continue
 
-        print(f"🎉 สำเร็จ! โหลดและเปิดใช้งานรูปภาพจาก Google Drive ได้จริง: {len(photo_data_list)} รูป")
+        print(f"🎉 สรุปผล: ดึงภาพจากโฟลเดอร์สาธารณะของนายได้จริงสำเร็จ {len(photo_data_list)} รูป")
         return jsonify(photo_data_list)
         
     except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดทางเทคนิค: {e}")
+        print(f"❌ เกิดข้อผิดพลาดในส่วนดึงข้อมูลหลังบ้าน: {e}")
         return jsonify([])
 
 @app.route('/api/convert-heic', methods=['POST'])
