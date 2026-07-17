@@ -5,20 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบค้นหาภาพถ่ายกิจกรรมโรงเรียนด้วยใบหน้า</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- นำเข้าไลบรารีตรวจจับใบหน้า face-api.js สำหรับประมวลผลบนหน้าบ้าน -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans antialiased">
     <div class="container mx-auto max-w-4xl p-4 pt-12">
         <!-- การ์ดค้นหาหลัก -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center max-w-md mx-auto animate-fade-in">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center max-w-md mx-auto">
             <h1 class="text-xl font-bold text-gray-800 mb-2">📸 ค้นหารูปภาพโรงเรียนด้วยใบหน้า</h1>
-            <p id="loading-ai" class="text-sm text-amber-600 font-medium mb-4 bg-amber-50 py-1.5 rounded-lg">⏳ ระบบกำลังดึงโครงสร้างพิกเซลและรูปภาพจาก Drive หลังบ้าน...</p>
+            <p id="loading-ai" class="text-sm text-amber-600 font-medium mb-4 bg-amber-50 py-1.5 rounded-lg">⏳ กำลังดาวน์โหลดและเตรียมระบบ AI สแกนใบหน้า...</p>
 
             <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 mb-4 hover:border-blue-500 bg-gray-50/50 transition">
                 <input type="file" id="search_face" accept="image/*,.heic,.heif" class="hidden" disabled>
                 <button type="button" onclick="document.getElementById('search_face').click();" class="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">เลือกรูปถ่ายใบหน้า</button>
                 <div id="file-name-text" class="text-xs text-gray-400 mt-2 truncate max-w-[250px] mx-auto">รองรับรูปถ่ายทั่วไปและรูป iPhone (.HEIC)</div>
             </div>
-            <button id="search-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition disabled:bg-gray-300" disabled>🔍 เริ่มส่งสแกนค้นหาใบหน้า</button>
+            <button id="search-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition disabled:bg-gray-300" disabled>🔍 เริ่มค้นหาใบหน้า</button>
         </div>
 
         <!-- แถบแสดงสถานะระหว่างประมวลผล -->
@@ -32,6 +34,9 @@
     </div>
 
     <script>
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        let allDrivePhotos = [];
+
         // อัปเดตชื่อไฟล์เมื่อเลือกรูปภาพ
         document.getElementById('search_face').addEventListener('change', (e) => {
             const nameDisplay = document.getElementById('file-name-text');
@@ -41,30 +46,42 @@
             }
         });
 
-        // ฟังก์ชันเชื่อมต่อเพื่อเปิดใช้งานระบบหลังบ้าน
+        // โหลดโมเดล AI และรูปภาพจากหลังบ้านเพื่อสแกนใบหน้า
         async function initSystem() {
             try {
-                const res = await fetch('/api/init-status');
-                const data = await res.json();
-                
                 const loader = document.getElementById('loading-ai');
+                loader.innerText = '⏳ กำลังโหลดโมเดลตรวจจับโครงสร้างใบหน้า (Tiny Face Detector)...';
+
+                // 1. โหลดโมเดลสำหรับสแกนใบหน้าบนเบราว์เซอร์
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+                
+                loader.innerText = '⏳ กำลังโหลดไฟล์ภาพทั้งหมดจากคลังหลังบ้าน...';
+
+                // 2. ดึงรูปภาพทั้งหมดที่หลังบ้านปรับสเกลขนาดเป็น 600px เรียบร้อยแล้ว
+                const res = await fetch('/api/photos');
+                allDrivePhotos = await res.json();
+                
                 loader.className = "text-sm text-green-700 font-medium mb-4 bg-green-50 py-1.5 rounded-lg";
-                loader.innerText = `✅ ระบบพร้อมสแกน! คลังหลังบ้านลงดัชนีเรียบร้อย (รวม ${data.total} รูป)`;
+                loader.innerText = `✅ ระบบพร้อมสแกน! โหลดรูปภาพสำเร็จ (รวม ${allDrivePhotos.length} รูป)`;
                 
                 document.getElementById('search_face').disabled = false;
                 document.getElementById('search-btn').disabled = false;
             } catch (e) {
-                document.getElementById('loading-ai').className = "text-sm text-red-700 font-medium mb-4 bg-red-50 py-1.5 rounded-lg";
-                document.getElementById('loading-ai').innerText = '❌ เชื่อมต่อหลังบ้านไม่สำเร็จ กรุณากด F5 รีเฟรชหน้าเว็บ';
+                console.error(e);
+                const loader = document.getElementById('loading-ai');
+                loader.className = "text-sm text-red-700 font-medium mb-4 bg-red-50 py-1.5 rounded-lg";
+                loader.innerText = '❌ เริ่มต้นระบบล้มเหลว กรุณากด F5 เพื่อลองใหม่อีกครั้ง';
             }
         }
 
-        // ตัวจับเหตุการณ์การกดปุ่มค้นหาใบหน้า
+        // ค้นหาจับคู่ใบหน้า
         document.getElementById('search-btn').addEventListener('click', async () => {
             const fileInput = document.getElementById('search_face');
             if (!fileInput.files.length) return alert('กรุณาเลือกไฟล์ภาพถ่ายใบหน้าต้นฉบับก่อนครับนาย');
 
-            const file = fileInput.files[0];
+            let file = fileInput.files[0];
             const statusText = document.getElementById('status-text');
             const gridPhotos = document.getElementById('grid-photos');
             const resultSection = document.getElementById('result-section');
@@ -73,45 +90,97 @@
             resultSection.classList.add('hidden');
             gridPhotos.innerHTML = '';
 
-            statusText.innerText = '🚀 กำลังอัปโหลดไฟล์รูปส่งสแกนด้วยโครงข่ายประสาทเทียมระดับหลังบ้าน...';
+            let imageElementToScan = new Image();
 
-            try {
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const response = await fetch('/api/search-face', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-
-                if (data.error) {
-                    statusText.innerText = `❌ ข้อผิดพลาดจากระบบ: ${data.error}`;
+            // จัดการกรณีเป็นไฟล์ HEIC จากเครื่อง iPhone
+            if (file.name.match(/\.(heic|heif)$/i)) {
+                statusText.innerText = '📱 ตรวจพบไฟล์รูป iPhone (HEIC) ส่งให้เซิร์ฟเวอร์หลังบ้านแปลงภาพและบีบขนาดพิกเซล...';
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    const convertRes = await fetch('/api/convert-heic', { method: 'POST', body: formData });
+                    const convertData = await convertRes.json();
+                    if(convertData.error) throw new Error(convertData.error);
+                    imageElementToScan.src = convertData.base64;
+                    await new Promise(resolve => imageElementToScan.onload = resolve);
+                } catch (heicErr) {
+                    statusText.innerText = '❌ ระบบหลังบ้านแปลงไฟล์ขัดข้อง กรุณาลองอัปโหลดใหม่อีกครั้งครับ';
                     return;
                 }
+            } else {
+                // หากเป็น JPG/PNG นำไปรันและปรับเป็น Image Element
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                await new Promise(resolve => {
+                    reader.onload = (e) => {
+                        imageElementToScan.src = e.target.result;
+                        imageElementToScan.onload = resolve;
+                    }
+                });
+            }
 
-                const matches = data.matches || [];
-                if (matches.length === 0) {
-                    statusText.innerText = '❌ AI ตรวจสอบพิกเซลโครงหน้าอย่างละเอียดแล้ว ไม่พบใบหน้านี้ในคลังครับนาย';
-                } else {
-                    statusText.innerText = `🎉 สำเร็จ! AI ตรวจสอบพิกเซลเทียบพิกเซลแล้วพบคุณในกิจกรรมโรงเรียน ${matches.length} รูปครับ`;
+            statusText.innerText = '⏳ AI กำลังประมวลผลถอดรหัสเวกเตอร์ใบหน้าต้นฉบับ...';
+            
+            // 🎯 สแกนเวกเตอร์ใบหน้าต้นฉบับ ปรับค่าความไวเพื่อดึงโครงหน้าออกมาได้ชัวร์ที่สุดบนสเกล 600px
+            const targetDetection = await faceapi.detectSingleFace(
+                imageElementToScan, 
+                new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
+            ).withFaceLandmarks().withFaceDescriptor();
+
+            if (!targetDetection) {
+                statusText.innerText = '❌ AI ตรวจไม่พบโครงสร้างใบหน้าในรูปภาพหัวเชื้อ กรุณาใช้รูปที่เห็นใบหน้าตรงและสว่างชัดเจนครับ';
+                return;
+            }
+
+            // ตั้งเกณฑ์ระยะห่างใบหน้า (Distance Threshold) สำหรับค้นหา
+            const faceMatcher = new faceapi.FaceMatcher(targetDetection, 0.60);
+            let matchCount = 0;
+            statusText.innerText = `🔄 AI กำลังสแกนเทียบใบหน้าในคลังรูปภาพทั้งหมด (${allDrivePhotos.length} รูป)...`;
+
+            // วนลูปสแกนรูปภาพทีละใบด้วยโครงสร้างความเร็วสูง
+            for (let photo of allDrivePhotos) {
+                try {
+                    const currentImg = new Image();
+                    currentImg.src = photo.base64;
+                    await new Promise(resolve => currentImg.onload = resolve);
                     
-                    matches.forEach(photo => {
+                    // สแกนทุกพิกเซลใบหน้าที่มีในรูปของคลัง
+                    const detections = await faceapi.detectAllFaces(
+                        currentImg, 
+                        new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.2 })
+                    ).withFaceLandmarks().withFaceDescriptors();
+
+                    let isMatchInPhoto = false;
+
+                    // ค้นหาทุกใบหน้าที่ตรวจเจอในภาพ (รองรับกรณีภาพกลุ่มกิจกรรม/ภาพห้องเรียน)
+                    for (let d of detections) {
+                        const match = faceMatcher.findBestMatch(d.descriptor);
+                        if (match.label !== 'unknown') {
+                            isMatchInPhoto = true;
+                            break; 
+                        }
+                    }
+
+                    if (isMatchInPhoto) {
+                        matchCount++;
                         const div = document.createElement('div');
                         div.className = 'bg-white p-2 rounded-lg shadow-sm border border-gray-100 transition hover:scale-[1.03] duration-200';
-                        div.innerHTML = `<img src="${photo.base64}" class="rounded-md w-full h-auto object-cover aspect-square" title="${photo.name}" loading="lazy">`;
+                        div.innerHTML = `<img src="${photo.base64}" class="rounded-md w-full h-auto object-cover aspect-square">`;
                         gridPhotos.appendChild(div);
-                    });
-                    resultSection.classList.remove('hidden');
+                        resultSection.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    console.log("Error scanning photo:", err);
                 }
-            } catch (err) {
-                statusText.innerText = '❌ การเชื่อมต่อล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้งครับ';
-                console.error(err);
+            }
+
+            if (matchCount === 0) {
+                statusText.innerText = '❌ ตรวจสอบครบถ้วนแล้ว ไม่พบรูปภาพใบหน้าของคุณในคลังระบบครับ';
+            } else {
+                statusText.innerText = `🎉 สำเร็จ! ค้นพบใบหน้าของคุณในกิจกรรมกิจกรรมโรงเรียนทั้งหมด ${matchCount} รูปครับนาย`;
             }
         });
 
-        // รันระบบเตรียมคลังข้อมูลทันทีที่เปิดหน้าเว็บ
         window.onload = initSystem;
     </script>
 </body>
