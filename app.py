@@ -10,7 +10,7 @@ register_heif_opener()
 
 app = Flask(__name__)
 
-GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
+GOOGLE_DRIVE_FOLDER_ID = '1G3-i_p57ReBsRHzkZj4ID1YAdfjPLrbq'
 
 @app.route('/')
 def index():
