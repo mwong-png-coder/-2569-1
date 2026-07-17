@@ -2,6 +2,7 @@ import os
 import requests
 import base64
 import io
+import re
 from flask import Flask, render_template, jsonify, request
 from PIL import Image
 from pillow_heif import register_heif_opener
@@ -10,7 +11,7 @@ register_heif_opener()
 
 app = Flask(__name__)
 
-# ดึงข้อมูลจากโฟลเดอร์ Google Drive ของนายโดยตรง
+# ไอดีโฟลเดอร์ Google Drive ของนาย
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
 
 @app.route('/')
@@ -20,29 +21,41 @@ def index():
 @app.route('/api/photos')
 def get_photos():
     try:
-        # ดึงรายชื่อไฟล์รูปภาพผ่าน Google Drive API แบบสาธารณะ
-        # หากต้องการความเสถียรสูงสุด แนะนำให้ตรวจสอบว่าแชร์โฟลเดอร์แบบ "ทุกคนที่มีลิงก์" เรียบร้อยแล้วนะครับนาย
-        url = f"https://www.googleapis.com/drive/v3/files?q='{GOOGLE_DRIVE_FOLDER_ID}'+in+parents+and+mimeType+contains+'image/'&fields=files(id,name)&pageSize=50"
-        response = requests.get(url)
+        # ดึงหน้าเว็บแชร์สาธารณะของ Google Drive (วิธีนี้เลี่ยงการใช้ API Key ได้ 100%)
+        folder_url = f"https://drive.google.com/embeddedfolderview?id={GOOGLE_DRIVE_FOLDER_ID}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        response = requests.get(folder_url, headers=headers)
         
         if response.status_code != 200:
-            print(f"❌ Google Drive API Return Error Code: {response.status_code}")
+            print(f"❌ ไม่สามารถดึงหน้าเว็บโฟลเดอร์ได้: {response.status_code}")
             return jsonify([])
-            
-        drive_files = response.json().get('files', [])
-        photo_data_list = []
+
+        # ใช้ Regex ค้นหารหัส File ID ของรูปภาพทั้งหมดที่ซ่อนอยู่ในหน้าเว็บ
+        # ปกติไฟล์ใน Google Drive จะมี ID ความยาว 33 ตัวอักษรประกอบด้วยตัวอักษรและตัวเลข
+        file_ids = list(set(re.findall(r'\"id\":\"([a-zA-Z0-9_-]{33})\"', response.text)))
         
-        for file in drive_files:
-            file_id = file['id']
-            # โหลดพิกเซลรูปภาพมาจัดการหลังบ้าน
+        # ป้องกันกรณีแพทเทิร์น ID ยาวต่างกัน (มองหารูปแบบดึงไฟล์ทั่วไป)
+        if not file_ids:
+            file_ids = list(set(re.findall(r'id=([a-zA-Z0-9_-]{25,})', response.text)))
+
+        photo_data_list = []
+        print(f"🔍 ตรวจพบไฟล์ดิบในไดรฟ์ของนาย: {len(file_ids)} ไฟล์ กำลังแปลงพิกเซล...")
+
+        for file_id in file_ids:
+            # ข้าม ID โฟลเดอร์ตัวเอง
+            if file_id == GOOGLE_DRIVE_FOLDER_ID:
+                continue
+                
             download_url = f"https://docs.google.com/uc?export=download&id={file_id}"
             img_resp = requests.get(download_url)
             
             if img_resp.status_code == 200:
                 try:
+                    # โหลดและแปลงไฟล์ภาพ
                     img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
-                    # ย่อขนาดรูปภาพให้เหลือสเกล 600px เพื่อให้หน้าบ้านรัน AI สแกนพิกเซลโครงหน้าตรงกัน 100%
-                    img.thumbnail((600, 600))
+                    img.thumbnail((600, 600))  # บีบพิกเซลให้เบาลงเพื่อสแกนเร็วขึ้น
                     
                     output = io.BytesIO()
                     img.save(output, format="JPEG", quality=80)
@@ -50,19 +63,18 @@ def get_photos():
                     
                     photo_data_list.append({
                         "id": file_id,
-                        "name": file['name'],
+                        "name": f"drive_image_{file_id[:6]}.jpg",
                         "base64": f"data:image/jpeg;base64,{encoded_img}"
                     })
-                    print(f"✔️ โหลดภาพสำเร็จ: {file['name']}")
                 except Exception as ex:
-                    print(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์ {file['name']}: {ex}")
-            else:
-                print(f"⚠️ ไม่สามารถดาวน์โหลดไฟล์ ID: {file_id} ได้ (Status: {img_resp.status_code})")
-                
-        print(f"📸 สรุปผล: ดึงภาพจาก Drive ของนายสำเร็จทั้งหมด {len(photo_data_list)} รูป")
+                    # ข้ามไฟล์ที่ไม่ใช่รูปภาพ (เช่น ไฟล์เอกสารอื่นๆ ในไดรฟ์)
+                    continue
+
+        print(f"🎉 สำเร็จ! โหลดและเปิดใช้งานรูปภาพจาก Google Drive ได้จริง: {len(photo_data_list)} รูป")
         return jsonify(photo_data_list)
+        
     except Exception as e:
-        print(f"❌ พังขณะดึงจาก Drive: {e}")
+        print(f"❌ เกิดข้อผิดพลาดทางเทคนิค: {e}")
         return jsonify([])
 
 @app.route('/api/convert-heic', methods=['POST'])
