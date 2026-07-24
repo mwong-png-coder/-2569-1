@@ -33,7 +33,6 @@
                     กำลังโหลด AI...
                 </div>
 
-                <!-- 🍔 ปุ่ม 3 ขีด (Hamburger Menu) -->
                 <button id="menu-btn" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition">
                     <i data-lucide="menu" class="w-5 h-5"></i>
                 </button>
@@ -41,7 +40,7 @@
         </div>
     </header>
 
-    <!-- 📱 Dropdown Menu จากปุ่ม 3 ขีด -->
+    <!-- Dropdown Menu -->
     <div id="dropdown-menu" class="hidden absolute right-4 top-20 z-50 w-56 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-2 transition-all">
         {% if current_user.is_authenticated %}
             <div class="p-3 border-b border-slate-700 text-xs">
@@ -62,7 +61,6 @@
 
     <main class="max-w-5xl mx-auto px-4 py-8 space-y-6">
 
-        <!-- 🔒 ส่วนอัปโหลดรูปเฉพาะ Admin (จะขึ้นเฉพาะเมื่อ Admin ล็อกอินแล้ว) -->
         {% if current_user.is_authenticated %}
         <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -71,7 +69,7 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-semibold text-indigo-200">แผงควบคุมแอดมิน: เพิ่มรูปกิจกรรมเข้าคลัง</h3>
-                    <p class="text-xs text-slate-400">อัปโหลดรูปภาพกิจกรรมเพื่อให้ผู้ใช้อื่นๆ สแกนค้นหาใบหน้า</p>
+                    <p class="text-xs text-slate-400">อัปโหลดรูปภาพกิจกรรม (บันทึกความละเอียดคมชัด 100% สำหรับดาวน์โหลด)</p>
                 </div>
             </div>
             <div class="flex flex-col items-end gap-1 w-full sm:w-auto">
@@ -86,12 +84,10 @@
         </div>
         {% endif %}
 
-        <!-- 👤 ส่วนค้นหาใบหน้าสำหรับคนทั่วไป (ทุกคนเข้ามาใช้ได้ทันที) -->
         <section class="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
             <div class="max-w-xl mx-auto text-center space-y-4">
                 <h2 class="text-xl font-semibold text-white">อัปโหลดรูปใบหน้าของคุณเพื่อเริ่มค้นหา</h2>
 
-                <!-- Input Box -->
                 <div onclick="document.getElementById('face-input').click()" 
                      class="group border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-8 cursor-pointer transition-all bg-slate-800/20 hover:bg-slate-800/60">
                     <input type="file" id="face-input" accept="image/*,.heic,.heif" class="hidden" disabled>
@@ -144,7 +140,7 @@
 
     </main>
 
-    <!-- 🔑 Pop-up Modal สำหรับ Admin Login -->
+    <!-- Modal Admin Login -->
     <div id="login-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-2xl p-6 shadow-2xl relative space-y-4">
             <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
@@ -184,7 +180,6 @@
         let drivePhotos = [];
         let selectedFile = null;
 
-        // Toggle 3 ขีด Dropdown Menu
         const menuBtn = document.getElementById('menu-btn');
         const dropdownMenu = document.getElementById('dropdown-menu');
         menuBtn.addEventListener('click', (e) => {
@@ -201,7 +196,6 @@
             document.getElementById('login-modal').classList.add('hidden');
         }
 
-        // Handle Admin Login Form
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const u = document.getElementById('admin-user').value;
@@ -254,14 +248,13 @@
             }
         }
 
-        // Event อัปโหลดคลังภาพ (แอดมิน)
         const galleryInput = document.getElementById('gallery-input');
         if (galleryInput) {
             galleryInput.addEventListener('change', async (e) => {
                 const files = e.target.files;
                 if (!files.length) return;
                 const statusText = document.getElementById('upload-status');
-                statusText.innerText = '⏳ กำลังอัปโหลด...';
+                statusText.innerText = '⏳ กำลังอัปโหลดภาพต้นฉบับ...';
                 
                 const formData = new FormData();
                 for (let file of files) formData.append('photos', file);
@@ -281,7 +274,6 @@
             });
         }
 
-        // Event เลือกรูปสแกน
         document.getElementById('face-input').addEventListener('change', async (e) => {
             if (!e.target.files.length) return;
             selectedFile = e.target.files[0];
@@ -315,7 +307,6 @@
             document.getElementById('search-btn').disabled = false;
         });
 
-        // Event เริ่มสแกนใบหน้า
         document.getElementById('search-btn').addEventListener('click', async () => {
             if (!selectedFile) return;
 
@@ -394,13 +385,21 @@
                         matchCount++;
                         const card = document.createElement('div');
                         card.className = "group relative bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-all duration-300";
+                        
+                        // ⚡ ปุ่มดาวน์โหลดแบบลิงก์ตรงภาพต้นฉบับ (Full HD / 4K ชัด 100%)
+                        const targetAttr = photo.is_drive ? 'target="_blank"' : '';
                         card.innerHTML = `
                             <img src="${photo.base64}" class="w-full aspect-square object-cover">
                             <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex items-end">
-                                <a href="${photo.base64}" download="matched_photo.jpg" class="w-full py-1.5 bg-blue-600 text-white text-xs text-center font-medium rounded-lg shadow">ดาวน์โหลดรูป</a>
+                                <a href="${photo.download_url}" ${targetAttr} download="matched_photo_hd.jpg" 
+                                   class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs text-center font-medium rounded-lg shadow flex items-center justify-center gap-1.5 transition">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                    โหลดภาพคมชัด HD (100%)
+                                </a>
                             </div>
                         `;
                         photoGrid.appendChild(card);
+                        lucide.createIcons();
                         resultsSection.classList.remove('hidden');
                     }
                 } catch (e) {

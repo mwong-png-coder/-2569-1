@@ -3,7 +3,7 @@ import requests
 import base64
 import io
 import re
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, send_from_directory
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
@@ -16,10 +16,9 @@ app.secret_key = 'super_secret_key_for_face_app_session'
 login_manager = LoginManager()
 login_manager.init_app(app)
 
-# บัญชีสำหรับ Admin เท่านั้น
 ADMIN_USER = {
     "username": "admin",
-    "password": "adminpassword" # เปลี่ยนรหัสผ่านแอดมินได้ตรงนี้ครับ
+    "password": "adminpassword"
 }
 
 class User(UserMixin):
@@ -34,19 +33,21 @@ def load_user(user_id):
     return None
 
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
+
+# แยกโฟลเดอร์เก็บต้นฉบับ และภาพย่อสำหรับสแกน
 UPLOAD_FOLDER = os.path.join('static', 'gallery')
+ORIGINAL_FOLDER = os.path.join(UPLOAD_FOLDER, 'originals')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(ORIGINAL_FOLDER, exist_ok=True)
 
-# ----------------- Helper Function จัดการไฟล์ภาพ (iPhone HEIC + Rotation) -----------------
-def process_image_file(file_obj, max_size=(600, 600)):
-    """ช่วยอ่านภาพ ปรับทิศทางตาม EXIF (iPhone) และย่อขนาด"""
+def process_image_file(file_obj, max_size=None):
+    """อ่านภาพ แก้ EXIF orientation (iPhone) และย่อขนาดถ้าระบุ max_size"""
     img = Image.open(file_obj)
-    img = ImageOps.exif_transpose(img) # แก้ปัญหารูปหมุนตะแคงจาก iPhone
+    img = ImageOps.exif_transpose(img)
     img = img.convert("RGB")
-    img.thumbnail(max_size)
+    if max_size:
+        img.thumbnail(max_size)
     return img
-
-# ----------------- Auth Routes -----------------
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -67,11 +68,15 @@ def logout():
 
 @app.route('/')
 def index():
-    # เข้าถึงได้ทุกคนโดยไม่ต้องใช้ login_required
     return render_template('index.html')
 
-# ----------------- Photo APIs -----------------
+# ----------------- Download API (ส่งไฟล์ต้นฉบับ 100%) -----------------
+@app.route('/download/original/<filename>')
+def download_original(filename):
+    """ส่งไฟล์ต้นฉบับแบบไม่ลดขนาดให้ดาวน์โหลด"""
+    return send_from_directory(ORIGINAL_FOLDER, filename, as_attachment=True)
 
+# ----------------- Photo APIs -----------------
 @app.route('/api/photos')
 def get_photos():
     photo_list = []
@@ -90,31 +95,55 @@ def get_photos():
             for fid in list(set(raw_ids)):
                 if fid == GOOGLE_DRIVE_FOLDER_ID:
                     continue
+                
+                # ลิงก์ตรงดาวน์โหลดภาพต้นฉบับจาก Drive
+                original_url = f"https://drive.google.com/uc?export=download&id={fid}"
                 img_url = f"https://docs.google.com/uc?export=download&id={fid}"
+                
                 img_res = requests.get(img_url, timeout=8)
                 if img_res.status_code == 200:
                     try:
-                        img = process_image_file(io.BytesIO(img_res.content), (600, 600))
+                        # ย่อรูปเฉพาะส่วนที่เอามาส่งให้ AI สแกนหน้า เพื่อความเร็ว
+                        img = process_image_file(io.BytesIO(img_res.content), max_size=(600, 600))
                         buf = io.BytesIO()
                         img.save(buf, format="JPEG", quality=80)
                         b64_str = base64.b64encode(buf.getvalue()).decode('utf-8')
-                        photo_list.append({"id": fid, "base64": f"data:image/jpeg;base64,{b64_str}"})
+                        
+                        photo_list.append({
+                            "id": fid, 
+                            "base64": f"data:image/jpeg;base64,{b64_str}",
+                            "download_url": original_url,
+                            "is_drive": True
+                        })
                     except Exception:
                         continue
     except Exception as e:
         print(f"⚠️ Google Drive error: {e}")
 
-    # 2. Local Static Gallery
+    # 2. Local Static Gallery (ภาพบน Server)
     if os.path.exists(UPLOAD_FOLDER):
         for fname in os.listdir(UPLOAD_FOLDER):
-            if fname.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif')):
+            if fname.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif')) and os.path.isfile(os.path.join(UPLOAD_FOLDER, fname)):
                 fpath = os.path.join(UPLOAD_FOLDER, fname)
+                orig_fname = f"orig_{fname}"
+                orig_path = os.path.join(ORIGINAL_FOLDER, orig_fname)
+                
                 try:
-                    img = process_image_file(fpath, (600, 600))
+                    # ภาพสำหรับสแกน (ย่อให้ไว)
+                    img = process_image_file(fpath, max_size=(600, 600))
                     buf = io.BytesIO()
                     img.save(buf, format="JPEG", quality=80)
                     b64_str = base64.b64encode(buf.getvalue()).decode('utf-8')
-                    photo_list.append({"id": fname, "base64": f"data:image/jpeg;base64,{b64_str}"})
+                    
+                    # URL ลิงก์โหลดภาพต้นฉบับ
+                    download_link = f"/download/original/{orig_fname}" if os.path.exists(orig_path) else f"/static/gallery/{fname}"
+                    
+                    photo_list.append({
+                        "id": fname, 
+                        "base64": f"data:image/jpeg;base64,{b64_str}",
+                        "download_url": download_link,
+                        "is_drive": False
+                    })
                 except Exception:
                     continue
 
@@ -123,7 +152,7 @@ def get_photos():
 @app.route('/api/upload-gallery', methods=['POST'])
 @login_required
 def upload_gallery():
-    """🔒 เฉพาะ Admin เท่านั้นที่อัปโหลดเข้าคลังได้"""
+    """🔒 เฉพาะ Admin: เก็บภาพต้นฉบับ 100% ไว้ใน /originals และสร้างภาพย่อไว้สแกน"""
     if not current_user.is_authenticated or getattr(current_user, 'role', '') != 'admin':
         return jsonify({'success': False, 'message': 'ไม่มีสิทธิ์ใช้งาน! เฉพาะ Admin เท่านั้น'}), 403
         
@@ -135,24 +164,35 @@ def upload_gallery():
         saved_count = 0
         for file in files:
             if file:
-                img = process_image_file(file, (1024, 1024))
-                save_path = os.path.join(UPLOAD_FOLDER, f"gallery_{saved_count}_{os.path.splitext(file.filename)[0]}.jpg")
-                img.save(save_path, format="JPEG", quality=85)
+                clean_name = re.sub(r'[^a-zA-Z0-9_\.-]', '_', os.path.splitext(file.filename)[0])
+                filename = f"gallery_{saved_count}_{clean_name}.jpg"
+                orig_filename = f"orig_{filename}"
+                
+                save_scan_path = os.path.join(UPLOAD_FOLDER, filename)
+                save_orig_path = os.path.join(ORIGINAL_FOLDER, orig_filename)
+                
+                # 1. บันทึกภาพต้นฉบับ คมชัด 100% (ไม่ย่อขนาด / คุณภาพสูงสุด)
+                orig_img = process_image_file(file, max_size=None)
+                orig_img.save(save_orig_path, format="JPEG", quality=100, subsampling=0)
+                
+                # 2. บันทึกภาพย่อขนาดสำหรับ AI ประมวลผลสแกนหน้าได้รวดเร็ว
+                scan_img = process_image_file(file, max_size=(800, 800))
+                scan_img.save(save_scan_path, format="JPEG", quality=80)
+                
                 saved_count += 1
                 
-        return jsonify({'success': True, 'message': f'เพิ่มรูปเข้าคลังสำเร็จ {saved_count} รูป'})
+        return jsonify({'success': True, 'message': f'เพิ่มรูปเข้าคลังสำเร็จ {saved_count} รูป (คมชัด 100%)'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
 
 @app.route('/api/convert-heic', methods=['POST'])
 def convert_heic():
-    """📱 รองรับการแปลงไฟล์ HEIC/HEIF จาก iPhone สำหรับสแกนหน้า"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'ไม่พบไฟล์'}), 400
         file = request.files['file']
         
-        img = process_image_file(file, (800, 800))
+        img = process_image_file(file, max_size=(800, 800))
         output = io.BytesIO()
         img.save(output, format="JPEG", quality=85)
         output.seek(0)
