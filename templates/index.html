@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Face Matcher - ระบบค้นหาใบหน้าในกิจกรรม</title>
+    <title>AI Face Matcher - ค้นหาใบหน้ากิจกรรมโรงเรียน</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
@@ -14,6 +14,7 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen selection:bg-blue-500 selection:text-white">
 
+    <!-- Header Section -->
     <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -22,25 +23,54 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-lg text-white">AI Face Recognition</h1>
-                    <p class="text-xs text-slate-400">ระบบค้นหาและจับคู่ใบหน้าในคลังกิจกรรม</p>
+                    <p class="text-xs text-slate-400">ผู้ใช้: {{ user.id }} ({{ user.role }})</p>
                 </div>
             </div>
-            <div id="sys-badge" class="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                กำลังเริ่มต้นระบบ AI...
+
+            <div class="flex items-center gap-4">
+                <div id="sys-badge" class="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    กำลังโหลด AI...
+                </div>
+                <a href="/logout" class="p-2 bg-slate-800 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700 transition" title="ออกจากระบบ">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                </a>
             </div>
         </div>
     </header>
 
-    <main class="max-w-5xl mx-auto px-4 py-8 space-y-8">
+    <main class="max-w-5xl mx-auto px-4 py-8 space-y-6">
 
-        <section class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
+        <!-- Admin / Add Photos to Gallery Banner -->
+        <div class="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg">
+                    <i data-lucide="folder-plus" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-200">เพิ่มรูปภาพกิจกรรมเข้าสู่คลังระบบ</h3>
+                    <p class="text-xs text-slate-400">อัปโหลดไฟล์รูปเพิ่มเพื่อให้ AI ดึงไปสแกนหาใบหน้า</p>
+                </div>
+            </div>
+            <div class="flex flex-col items-end gap-1 w-full sm:w-auto">
+                <input type="file" id="gallery-input" multiple accept="image/*,.heic,.heif" class="hidden">
+                <button onclick="document.getElementById('gallery-input').click()" 
+                        class="w-full sm:w-auto px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-medium text-slate-200 rounded-xl border border-slate-600 transition flex items-center justify-center gap-2">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    เพิ่มรูปกิจกรรมเข้าคลัง
+                </button>
+                <span id="upload-status" class="text-[11px] text-slate-400"></span>
+            </div>
+        </div>
+
+        <!-- Search Card -->
+        <section class="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
             <div class="max-w-xl mx-auto text-center space-y-4">
-                <h2 class="text-xl font-semibold text-white">อัปโหลดภาพใบหน้าเพื่อค้นหา</h2>
-                <p class="text-xs text-slate-400">ระบบจะวิเคราะห์โครงสร้างพิกเซลใบหน้า (128 Dimensions) แล้วเปรียบเทียบกับภาพในคลัง</p>
+                <h2 class="text-xl font-semibold text-white">เลือกภาพใบหน้าของคุณเพื่อเริ่มสแกน</h2>
 
+                <!-- Upload Area -->
                 <div onclick="document.getElementById('face-input').click()" 
-                     class="group border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-8 cursor-pointer transition-all bg-slate-800/30 hover:bg-slate-800/80 relative overflow-hidden">
+                     class="group border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-8 cursor-pointer transition-all bg-slate-800/20 hover:bg-slate-800/60">
                     <input type="file" id="face-input" accept="image/*,.heic,.heif" class="hidden" disabled>
                     
                     <div class="flex flex-col items-center gap-3">
@@ -51,8 +81,8 @@
                             <i data-lucide="upload-cloud" class="w-8 h-8"></i>
                         </div>
                         <div>
-                            <p id="file-label" class="text-sm font-medium text-slate-200">คลิกเพื่อเลือกรูปภาพ หรือลากไฟล์มาวางที่นี่</p>
-                            <p class="text-xs text-slate-500 mt-1">รองรับไฟล์ JPG, PNG และ HEIC (iPhone)</p>
+                            <p id="file-label" class="text-sm font-medium text-slate-200">คลิกเพื่อเลือกรูป หรือลากไฟล์มาวาง</p>
+                            <p class="text-xs text-slate-500 mt-1">รองรับ JPG, PNG และ HEIC (iPhone)</p>
                         </div>
                     </div>
                 </div>
@@ -65,6 +95,7 @@
             </div>
         </section>
 
+        <!-- Progress Banner -->
         <div id="status-banner" class="hidden bg-slate-800/80 border border-slate-700 rounded-xl p-4 text-center space-y-2">
             <div class="flex items-center justify-center gap-2 text-blue-400 font-medium text-sm" id="status-text">
                 <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
@@ -75,11 +106,12 @@
             </div>
         </div>
 
+        <!-- Results Grid -->
         <section id="results-section" class="hidden space-y-4">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-white flex items-center gap-2">
                     <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
-                    ภาพที่ตรวจพบใบหน้าของคุณ
+                    ผลการค้นพบภาพใบหน้าของคุณ
                 </h3>
                 <span id="match-count-badge" class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-lg"></span>
             </div>
@@ -95,16 +127,13 @@
         let drivePhotos = [];
         let selectedFile = null;
 
-        // โหลดโมเดล AI และดึงคลังรูปภาพ
         async function initApp() {
             const badge = document.getElementById('sys-badge');
             try {
-                // 1. โหลดโมเดล AI ประมวลผลใบหน้า
                 await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
                 await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
 
-                // 2. ดึงคลังภาพจากหลังบ้าน
                 const res = await fetch('/api/photos');
                 const data = await res.json();
 
@@ -121,30 +150,47 @@
             } catch (err) {
                 console.error(err);
                 badge.className = "px-3 py-1.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-2";
-                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> เริ่มระบบไม่สำเร็จ`;
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> โหลด AI ไม่สำเร็จ`;
             }
         }
 
-        // Preview ภาพเมื่อเลือกไฟล์
+        // Event อัปโหลดรูปเข้าคลัง
+        document.getElementById('gallery-input').addEventListener('change', async (e) => {
+            const files = e.target.files;
+            if (!files.length) return;
+            const statusText = document.getElementById('upload-status');
+            statusText.innerText = '⏳ กำลังอัปโหลด...';
+            
+            const formData = new FormData();
+            for (let file of files) formData.append('photos', file);
+            
+            try {
+                const res = await fetch('/api/upload-gallery', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    statusText.innerText = `✅ ${data.message}`;
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    statusText.innerText = `❌ ${data.message}`;
+                }
+            } catch (err) {
+                statusText.innerText = '❌ เกิดข้อผิดพลาดในการอัปโหลด';
+            }
+        });
+
+        // Event เลือกรูปสแกนค้นหา
         document.getElementById('face-input').addEventListener('change', (e) => {
             if (!e.target.files.length) return;
             selectedFile = e.target.files[0];
 
-            const previewImg = document.getElementById('img-preview');
-            const previewContainer = document.getElementById('preview-container');
-            const uploadIcon = document.getElementById('upload-icon');
-            const fileLabel = document.getElementById('file-label');
-
-            const url = URL.createObjectURL(selectedFile);
-            previewImg.src = url;
-            previewContainer.classList.remove('hidden');
-            uploadIcon.classList.add('hidden');
-            fileLabel.innerText = selectedFile.name;
-
+            document.getElementById('img-preview').src = URL.createObjectURL(selectedFile);
+            document.getElementById('preview-container').classList.remove('hidden');
+            document.getElementById('upload-icon').classList.add('hidden');
+            document.getElementById('file-label').innerText = selectedFile.name;
             document.getElementById('search-btn').disabled = false;
         });
 
-        // ปุ่มสั่งสแกนค้นหา
+        // Event กดเริ่มสแกน
         document.getElementById('search-btn').addEventListener('click', async () => {
             if (!selectedFile) return;
 
@@ -161,9 +207,8 @@
 
             let imgElement = new Image();
 
-            // จัดการภาพ HEIC ของ iPhone
             if (selectedFile.name.match(/\.(heic|heif)$/i)) {
-                statusText.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> แปลงไฟล์ HEIC จาก iPhone...`;
+                statusText.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> แปลงไฟล์ HEIC...`;
                 lucide.createIcons();
                 const formData = new FormData();
                 formData.append('file', selectedFile);
@@ -176,8 +221,7 @@
 
             await new Promise(r => imgElement.onload = r);
 
-            // 🎯 1. คำนวณเวกเตอร์ใบหน้าต้นฉบับ
-            statusText.innerHTML = `<i data-lucide="cpu" class="w-4 h-4 animate-spin"></i> ถอดรหัสเวกเตอร์โครงสร้างใบหน้า...`;
+            statusText.innerHTML = `<i data-lucide="cpu" class="w-4 h-4 animate-spin"></i> ถอดรหัสโครงสร้างพิกเซลใบหน้า...`;
             lucide.createIcons();
             progressBar.style.width = '30%';
 
@@ -187,12 +231,11 @@
             ).withFaceLandmarks().withFaceDescriptor();
 
             if (!targetDetection) {
-                statusText.innerHTML = `<span class="text-rose-400">❌ ไม่พบโครงสร้างใบหน้าในรูปภาพต้นฉบับ กรุณาใช้รูปหน้าตรงสว่างชัดเจน</span>`;
+                statusText.innerHTML = `<span class="text-rose-400">❌ ไม่พบโครงสร้างใบหน้าในรูปภาพต้นฉบับ</span>`;
                 progressBar.style.width = '0%';
                 return;
             }
 
-            // 🎯 2. เปรียบเทียบกับคลังภาพ
             const matcher = new faceapi.FaceMatcher(targetDetection, 0.60);
             let matchCount = 0;
 
@@ -200,7 +243,7 @@
                 const photo = drivePhotos[i];
                 const pct = Math.round(30 + ((i + 1) / drivePhotos.length) * 70);
                 progressBar.style.width = `${pct}%`;
-                statusText.innerHTML = `<i data-lucide="search" class="w-4 h-4 animate-spin"></i> กำลังสแกนรูปภาพ (${i + 1}/${drivePhotos.length})...`;
+                statusText.innerHTML = `<i data-lucide="search" class="w-4 h-4 animate-spin"></i> สแกนคลังภาพ (${i + 1}/${drivePhotos.length})...`;
                 lucide.createIcons();
 
                 try {
@@ -241,8 +284,8 @@
             }
 
             statusText.innerHTML = matchCount > 0 
-                ? `<span class="text-emerald-400">🎉 สแกนเสร็จสิ้น! ค้นพบใบหน้าตรงกันทั้งหมด ${matchCount} รูป</span>`
-                : `<span class="text-amber-400">❌ สแกนเสร็จสิ้น ไม่พบใบหน้านี้ในคลังภาพ</span>`;
+                ? `<span class="text-emerald-400">🎉 สแกนเรียบร้อย! พบบุคคลตรงกัน ${matchCount} รูป</span>`
+                : `<span class="text-amber-400">❌ สแกนเรียบร้อย ไม่พบใบหน้านี้ในคลังภาพ</span>`;
 
             document.getElementById('match-count-badge').innerText = `พบ ${matchCount} รูป`;
         });
