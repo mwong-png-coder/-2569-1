@@ -11,7 +11,7 @@ register_heif_opener()
 
 app = Flask(__name__)
 
-# ไอดีโฟลเดอร์ Google Drive ของนาย (ความยาว 28 ตัวอักษร)
+# ID โฟลเดอร์ Google Drive ของนาย
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
 
 @app.route('/')
@@ -20,76 +20,60 @@ def index():
 
 @app.route('/api/photos')
 def get_photos():
+    """ดึงไฟล์รูปภาพและแปลงให้พร้อมส่งไปประมวลผลใบหน้าบนหน้าบ้าน"""
     try:
-        # เข้าถึงหน้าเว็บแสดงผลไฟล์ของโฟลเดอร์โดยตรง
+        # ดึงรายชื่อไฟล์จาก Google Drive
         folder_url = f"https://drive.google.com/embeddedfolderview?id={GOOGLE_DRIVE_FOLDER_ID}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        response = requests.get(folder_url, headers=headers)
+        response = requests.get(folder_url, headers=headers, timeout=15)
         
-        if response.status_code != 200:
-            print(f"❌ ดึงข้อมูลโฟลเดอร์ขัดข้อง: {response.status_code}")
-            return jsonify([])
+        # ดึง File ID ทั้งหมดจากโครงสร้างหน้าเว็บ
+        file_ids = list(set(re.findall(r'\"id\":\"([a-zA-Z0-9_-]{25,38})\"', response.text)))
+        if not file_ids:
+            file_ids = list(set(re.findall(r'id=([a-zA-Z0-9_-]{25,38})', response.text)))
 
-        # ปรับแก้ Regex: รองรับความยาวของ Google Drive File ID ตั้งแต่ 25 ถึง 35 ตัวอักษร (แก้ปัญหาค้นหาไม่เจอ)
-        raw_ids = re.findall(r'\"id\":\"([a-zA-Z0-9_-]{25,35})\"', response.text)
-        
-        # ค้นหาเพิ่มเติมในโครงสร้างสำรอง
-        if not raw_ids:
-            raw_ids = re.findall(r'id=([a-zA-Z0-9_-]{25,35})', response.text)
-            
-        file_ids = list(set(raw_ids))
-        photo_data_list = []
-        
-        print(f"🔍 ตรวจพบไอดีที่น่าจะเป็นไฟล์รูปภาพ: {len(file_ids)} รายการ")
-
-        for file_id in file_ids:
-            # ข้ามไอดีของโฟลเดอร์หลัก
-            if file_id == GOOGLE_DRIVE_FOLDER_ID:
+        photo_list = []
+        for fid in file_ids:
+            if fid == GOOGLE_DRIVE_FOLDER_ID:
                 continue
-                
-            download_url = f"https://docs.google.com/uc?export=download&id={file_id}"
-            img_resp = requests.get(download_url)
             
-            if img_resp.status_code == 200:
+            # ดึงไฟล์รูปภาพและบีบขนาดให้พอดีสำหรับการตรวจจับพิกเซลใบหน้า
+            img_url = f"https://docs.google.com/uc?export=download&id={fid}"
+            res = requests.get(img_url, timeout=10)
+            if res.status_code == 200:
                 try:
-                    # ทดสอบเปิดไฟล์เพื่อกรองเอาเฉพาะไฟล์ที่เป็นรูปภาพจริง ๆ
-                    img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
-                    img.thumbnail((600, 600))  # ย่อขนาดรูปภาพเพื่อลดปริมาณการส่งข้อมูลและทำให้ AI สแกนพิกเซลเร็วขึ้น
+                    img = Image.open(io.BytesIO(res.content)).convert("RGB")
+                    img.thumbnail((600, 600))  # สเกลมาตรฐาน 600px
                     
-                    output = io.BytesIO()
-                    img.save(output, format="JPEG", quality=80)
-                    encoded_img = base64.b64encode(output.getvalue()).decode('utf-8')
+                    buf = io.BytesIO()
+                    img.save(buf, format="JPEG", quality=80)
+                    b64_str = base64.b64encode(buf.getvalue()).decode('utf-8')
                     
-                    photo_data_list.append({
-                        "id": file_id,
-                        "name": f"drive_image_{file_id[:6]}.jpg",
-                        "base64": f"data:image/jpeg;base64,{encoded_img}"
+                    photo_list.append({
+                        "id": fid,
+                        "base64": f"data:image/jpeg;base64,{b64_str}"
                     })
-                    print(f"✔️ โหลดและย่อรูปภาพสำเร็จ: {file_id}")
                 except Exception:
-                    # ข้ามไฟล์ที่ไม่ใช่รูปภาพโดยอัตโนมัติ
                     continue
 
-        print(f"🎉 สรุปผล: ดึงภาพจากโฟลเดอร์สาธารณะของนายได้จริงสำเร็จ {len(photo_data_list)} รูป")
-        return jsonify(photo_data_list)
-        
+        return jsonify({"success": True, "count": len(photo_list), "photos": photo_list})
     except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดในส่วนดึงข้อมูลหลังบ้าน: {e}")
-        return jsonify([])
+        return jsonify({"success": False, "error": str(e), "photos": []})
 
 @app.route('/api/convert-heic', methods=['POST'])
 def convert_heic():
+    """แปลงรูปภาพ iPhone (.HEIC) เป็น JPEG สำหรับสแกน"""
     try:
         if 'file' not in request.files:
-            return jsonify({'error': 'No file'}), 400
+            return jsonify({'error': 'ไม่พบไฟล์'}), 400
         file = request.files['file']
-        image = Image.open(file)
-        image.thumbnail((600, 600)) 
+        image = Image.open(file).convert("RGB")
+        image.thumbnail((600, 600))
         
         output = io.BytesIO()
-        image.convert("RGB").save(output, format="JPEG", quality=80)
+        image.save(output, format="JPEG", quality=80)
         output.seek(0)
         
         encoded_img = base64.b64encode(output.read()).decode('utf-8')
