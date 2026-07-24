@@ -23,7 +23,7 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-lg text-white">AI Face Recognition</h1>
-                    <p class="text-xs text-slate-400">ผู้ใช้: {{ user.id }} ({{ user.role }})</p>
+                    <p class="text-xs text-slate-400">ผู้ใช้: {{ current_user.id if current_user and current_user.is_authenticated else 'Guest' }}</p>
                 </div>
             </div>
 
@@ -54,7 +54,7 @@
             </div>
             <div class="flex flex-col items-end gap-1 w-full sm:w-auto">
                 <input type="file" id="gallery-input" multiple accept="image/*,.heic,.heif" class="hidden">
-                <button onclick="document.getElementById('gallery-input').click()" 
+                <button type="button" onclick="document.getElementById('gallery-input').click()" 
                         class="w-full sm:w-auto px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-medium text-slate-200 rounded-xl border border-slate-600 transition flex items-center justify-center gap-2">
                     <i data-lucide="plus-circle" class="w-4 h-4"></i>
                     เพิ่มรูปกิจกรรมเข้าคลัง
