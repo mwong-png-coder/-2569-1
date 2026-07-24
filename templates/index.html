@@ -12,10 +12,10 @@
         * { font-family: 'Prompt', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen selection:bg-blue-500 selection:text-white">
+<body class="bg-slate-900 text-slate-100 min-h-screen selection:bg-blue-500 selection:text-white relative">
 
     <!-- Header Section -->
-    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="p-2.5 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
@@ -23,31 +23,47 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-lg text-white">AI Face Recognition</h1>
-                    <p class="text-xs text-slate-400">
-                        ผู้ใช้: {{ current_user.id }} 
-                        {% if current_user.role == 'admin' %}
-                            <span class="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[10px] font-semibold">ADMIN</span>
-                        {% endif %}
-                    </p>
+                    <p class="text-xs text-slate-400">ระบบค้นหารูปภาพกิจกรรมด้วยใบหน้า</p>
                 </div>
             </div>
 
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3">
                 <div id="sys-badge" class="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                     กำลังโหลด AI...
                 </div>
-                <a href="/logout" class="p-2 bg-slate-800 hover:bg-rose-600/20 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700 transition" title="ออกจากระบบ">
-                    <i data-lucide="log-out" class="w-5 h-5"></i>
-                </a>
+
+                <!-- 🍔 ปุ่ม 3 ขีด (Hamburger Menu) -->
+                <button id="menu-btn" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
             </div>
         </div>
     </header>
 
+    <!-- 📱 Dropdown Menu จากปุ่ม 3 ขีด -->
+    <div id="dropdown-menu" class="hidden absolute right-4 top-20 z-50 w-56 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-2 transition-all">
+        {% if current_user.is_authenticated %}
+            <div class="p-3 border-b border-slate-700 text-xs">
+                <p class="text-slate-400">สถานะการใช้งาน</p>
+                <p class="font-semibold text-emerald-400 flex items-center gap-1 mt-0.5">
+                    <i data-lucide="shield-check" class="w-4 h-4"></i> Admin Logged In
+                </p>
+            </div>
+            <a href="/logout" class="w-full mt-1 p-2.5 text-xs text-rose-400 hover:bg-rose-500/10 rounded-xl transition flex items-center gap-2">
+                <i data-lucide="log-out" class="w-4 h-4"></i> ออกจากระบบ Admin
+            </a>
+        {% else %}
+            <button onclick="openLoginModal()" class="w-full p-2.5 text-xs text-slate-200 hover:bg-slate-700/60 rounded-xl transition flex items-center gap-2">
+                <i data-lucide="lock" class="w-4 h-4 text-blue-400"></i> ล็อกอินผู้ดูแลระบบ (Admin)
+            </button>
+        {% endif %}
+    </div>
+
     <main class="max-w-5xl mx-auto px-4 py-8 space-y-6">
 
-        <!-- 🔒 ส่วนนี้แสดงผลเฉพาะผู้ใช้งานที่เป็น ADMIN เท่านั้น -->
-        {% if current_user.role == 'admin' %}
+        <!-- 🔒 ส่วนอัปโหลดรูปเฉพาะ Admin (จะขึ้นเฉพาะเมื่อ Admin ล็อกอินแล้ว) -->
+        {% if current_user.is_authenticated %}
         <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
                 <div class="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl">
@@ -70,10 +86,10 @@
         </div>
         {% endif %}
 
-        <!-- 👤 ส่วนสแกนค้นหาใบหน้า (ทุกคนใช้งานได้) -->
+        <!-- 👤 ส่วนค้นหาใบหน้าสำหรับคนทั่วไป (ทุกคนเข้ามาใช้ได้ทันที) -->
         <section class="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
             <div class="max-w-xl mx-auto text-center space-y-4">
-                <h2 class="text-xl font-semibold text-white">อัปโหลดรูปใบหน้าของคุณเพื่อเริ่มสแกน</h2>
+                <h2 class="text-xl font-semibold text-white">อัปโหลดรูปใบหน้าของคุณเพื่อเริ่มค้นหา</h2>
 
                 <!-- Input Box -->
                 <div onclick="document.getElementById('face-input').click()" 
@@ -97,7 +113,7 @@
                 <button id="search-btn" disabled 
                         class="w-full py-3.5 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2">
                     <i data-lucide="sparkles" class="w-5 h-5"></i>
-                    เริ่มสแกนค้นหาพิกเซลใบหน้า
+                    เริ่มสแกนค้นหาใบหน้า
                 </button>
             </div>
         </section>
@@ -128,11 +144,88 @@
 
     </main>
 
+    <!-- 🔑 Pop-up Modal สำหรับ Admin Login -->
+    <div id="login-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-2xl p-6 shadow-2xl relative space-y-4">
+            <button onclick="closeLoginModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            
+            <div class="text-center space-y-1">
+                <div class="inline-flex p-2.5 bg-blue-600/20 text-blue-400 rounded-xl mb-1">
+                    <i data-lucide="shield-check" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white">เข้าสู่ระบบ Admin</h3>
+                <p class="text-xs text-slate-400">สำหรับผู้ดูแลระบบที่ต้องการเพิ่มรูปภาพ</p>
+            </div>
+
+            <form id="login-form" class="space-y-3">
+                <div>
+                    <label class="block text-xs text-slate-300 mb-1">Username</label>
+                    <input type="text" id="admin-user" required placeholder="admin" 
+                           class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-300 mb-1">Password</label>
+                    <input type="password" id="admin-pass" required placeholder="••••••••" 
+                           class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <p id="login-error" class="text-xs text-rose-400 text-center hidden"></p>
+                <button type="submit" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs rounded-xl shadow transition">
+                    เข้าสู่ระบบ
+                </button>
+            </form>
+        </div>
+    </div>
+
     <script>
         lucide.createIcons();
         const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
         let drivePhotos = [];
         let selectedFile = null;
+
+        // Toggle 3 ขีด Dropdown Menu
+        const menuBtn = document.getElementById('menu-btn');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle('hidden');
+        });
+        document.addEventListener('click', () => dropdownMenu.classList.add('hidden'));
+
+        function openLoginModal() {
+            dropdownMenu.classList.add('hidden');
+            document.getElementById('login-modal').classList.remove('hidden');
+        }
+        function closeLoginModal() {
+            document.getElementById('login-modal').classList.add('hidden');
+        }
+
+        // Handle Admin Login Form
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const u = document.getElementById('admin-user').value;
+            const p = document.getElementById('admin-pass').value;
+            const errEl = document.getElementById('login-error');
+
+            const formData = new FormData();
+            formData.append('username', u);
+            formData.append('password', p);
+
+            try {
+                const res = await fetch('/login', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    errEl.innerText = data.message;
+                    errEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errEl.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+                errEl.classList.remove('hidden');
+            }
+        });
 
         async function initApp() {
             const badge = document.getElementById('sys-badge');
@@ -161,7 +254,7 @@
             }
         }
 
-        // Event อัปโหลดคลังภาพ (ทำงานเฉพาะ Admin)
+        // Event อัปโหลดคลังภาพ (แอดมิน)
         const galleryInput = document.getElementById('gallery-input');
         if (galleryInput) {
             galleryInput.addEventListener('change', async (e) => {
@@ -195,7 +288,6 @@
 
             const previewImg = document.getElementById('img-preview');
             
-            // แสดงพรีวิวสำหรับรูป HEIC
             if (selectedFile.name.match(/\.(heic|heif)$/i)) {
                 document.getElementById('file-label').innerText = `กำลังแปลงไฟล์ HEIC (${selectedFile.name})...`;
                 const formData = new FormData();

@@ -15,12 +15,11 @@ app.secret_key = 'super_secret_key_for_face_app_session'
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
 
-# ตั้งค่าบัญชีผู้ใช้และ Role (Admin เท่านั้นที่อัปโหลดได้)
-USERS = {
-    "admin": {"password": "adminpassword", "role": "admin"},
-    "student": {"password": "schoolpassword", "role": "user"}
+# บัญชีสำหรับ Admin เท่านั้น
+ADMIN_USER = {
+    "username": "admin",
+    "password": "adminpassword" # เปลี่ยนรหัสผ่านแอดมินได้ตรงนี้ครับ
 }
 
 class User(UserMixin):
@@ -30,15 +29,15 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    if user_id in USERS:
-        return User(user_id, USERS[user_id]["role"])
+    if user_id == ADMIN_USER["username"]:
+        return User(ADMIN_USER["username"], "admin")
     return None
 
 GOOGLE_DRIVE_FOLDER_ID = '1O6e6-XFTMsz6R1MJBHp9ME88HVnhPdb'
 UPLOAD_FOLDER = os.path.join('static', 'gallery')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ----------------- Helper Function จัดการไฟล์ภาพ -----------------
+# ----------------- Helper Function จัดการไฟล์ภาพ (iPhone HEIC + Rotation) -----------------
 def process_image_file(file_obj, max_size=(600, 600)):
     """ช่วยอ่านภาพ ปรับทิศทางตาม EXIF (iPhone) และย่อขนาด"""
     img = Image.open(file_obj)
@@ -49,39 +48,31 @@ def process_image_file(file_obj, max_size=(600, 600)):
 
 # ----------------- Auth Routes -----------------
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['POST'])
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-        
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        if username in USERS and USERS[username]["password"] == password:
-            user = User(username, USERS[username]["role"])
-            login_user(user)
-            return redirect(url_for('index'))
-        else:
-            flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
-            
-    return render_template('login.html')
+    username = request.form.get('username')
+    password = request.form.get('password')
+    
+    if username == ADMIN_USER["username"] and password == ADMIN_USER["password"]:
+        user = User(username, "admin")
+        login_user(user)
+        return jsonify({'success': True, 'message': 'ล็อกอินแอดมินสำเร็จ'})
+    else:
+        return jsonify({'success': False, 'message': 'ชื่อผู้ใช้หรือรหัสผ่านแอดมินไม่ถูกต้อง'}), 401
 
 @app.route('/logout')
-@login_required
 def logout():
     logout_user()
-    return redirect(url_for('login'))
+    return redirect(url_for('index'))
 
 @app.route('/')
-@login_required
 def index():
+    # เข้าถึงได้ทุกคนโดยไม่ต้องใช้ login_required
     return render_template('index.html')
 
 # ----------------- Photo APIs -----------------
 
 @app.route('/api/photos')
-@login_required
 def get_photos():
     photo_list = []
     
@@ -133,7 +124,7 @@ def get_photos():
 @login_required
 def upload_gallery():
     """🔒 เฉพาะ Admin เท่านั้นที่อัปโหลดเข้าคลังได้"""
-    if current_user.role != 'admin':
+    if not current_user.is_authenticated or getattr(current_user, 'role', '') != 'admin':
         return jsonify({'success': False, 'message': 'ไม่มีสิทธิ์ใช้งาน! เฉพาะ Admin เท่านั้น'}), 403
         
     try:
@@ -154,7 +145,6 @@ def upload_gallery():
         return jsonify({'success': False, 'message': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
 
 @app.route('/api/convert-heic', methods=['POST'])
-@login_required
 def convert_heic():
     """📱 รองรับการแปลงไฟล์ HEIC/HEIF จาก iPhone สำหรับสแกนหน้า"""
     try:
