@@ -17,7 +17,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 ADMIN_USER = {
-    "username": "wongsakorn",
+    "username": "acer336",
     "password": "acer336"
 }
 

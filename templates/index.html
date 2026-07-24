@@ -362,7 +362,7 @@
 
             const targetDetection = await faceapi.detectSingleFace(
                 imgElement,
-                new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
+                new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 })
             ).withFaceLandmarks().withFaceDescriptor();
 
             if (!targetDetection) {
@@ -371,7 +371,7 @@
                 return;
             }
 
-            const matcher = new faceapi.FaceMatcher(targetDetection, 0.60);
+            const matcher = new faceapi.FaceMatcher(targetDetection, 0.42);
             let matchCount = 0;
             
             // โครงสร้างจัดกลุ่มตามโฟลเดอร์งาน { "งานกีฬา": [photo1, photo2], "งานรับน้อง": [photo3] }
