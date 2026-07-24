@@ -23,7 +23,7 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-lg text-white">AI Face Recognition</h1>
-                    <p class="text-xs text-slate-400">ระบบค้นหารูปภาพกิจกรรมด้วยใบหน้า</p>
+                    <p class="text-xs text-slate-400">ระบบค้นหารูปภาพกิจกรรมแยกตามโฟลเดอร์งาน</p>
                 </div>
             </div>
 
@@ -61,32 +61,38 @@
 
     <main class="max-w-5xl mx-auto px-4 py-8 space-y-6">
 
+        <!-- 🔒 แผงควบคุมแอดมินอัปโหลดแยกโฟลเดอร์งาน -->
         {% if current_user.is_authenticated %}
-        <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-5 space-y-4">
             <div class="flex items-center gap-3">
                 <div class="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl">
-                    <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                    <i data-lucide="folder-plus" class="w-5 h-5"></i>
                 </div>
                 <div>
-                    <h3 class="text-sm font-semibold text-indigo-200">แผงควบคุมแอดมิน: เพิ่มรูปกิจกรรมเข้าคลัง</h3>
-                    <p class="text-xs text-slate-400">อัปโหลดรูปภาพกิจกรรม (บันทึกความละเอียดคมชัด 100% สำหรับดาวน์โหลด)</p>
+                    <h3 class="text-sm font-semibold text-indigo-200">แผงควบคุมแอดมิน: สร้างโฟลเดอร์/อัลบั้มรูปงาน</h3>
+                    <p class="text-xs text-slate-400">ตั้งชื่องาน แล้วอัปโหลดรูปหลายภาพพร้อมกันเพื่อจัดหมวดหมู่</p>
                 </div>
             </div>
-            <div class="flex flex-col items-end gap-1 w-full sm:w-auto">
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input type="text" id="event-name-input" placeholder="ระบุชื่องาน (เช่น งานกีฬาแถบสี 2026)" 
+                       class="sm:col-span-2 px-3.5 py-2 bg-slate-900 border border-indigo-500/30 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500">
+                
                 <input type="file" id="gallery-input" multiple accept="image/*,.heic,.heif" class="hidden">
-                <button type="button" onclick="document.getElementById('gallery-input').click()" 
-                        class="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-xl shadow transition flex items-center justify-center gap-2">
-                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                    เพิ่มรูปกิจกรรมเข้าคลัง
+                <button type="button" onclick="handleAdminUploadClick()" 
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-xl shadow transition flex items-center justify-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    เลือกรูปและบันทึกอัลบั้ม
                 </button>
-                <span id="upload-status" class="text-[11px] text-slate-400"></span>
             </div>
+            <p id="upload-status" class="text-xs text-indigo-300"></p>
         </div>
         {% endif %}
 
+        <!-- 👤 ส่วนค้นหาใบหน้า -->
         <section class="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
             <div class="max-w-xl mx-auto text-center space-y-4">
-                <h2 class="text-xl font-semibold text-white">อัปโหลดรูปใบหน้าของคุณเพื่อเริ่มค้นหา</h2>
+                <h2 class="text-xl font-semibold text-white">อัปโหลดรูปใบหน้าเพื่อค้นหาว่าอยู่ในงานไหนบ้าง</h2>
 
                 <div onclick="document.getElementById('face-input').click()" 
                      class="group border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-2xl p-8 cursor-pointer transition-all bg-slate-800/20 hover:bg-slate-800/60">
@@ -100,7 +106,7 @@
                             <i data-lucide="upload-cloud" class="w-8 h-8"></i>
                         </div>
                         <div>
-                            <p id="file-label" class="text-sm font-medium text-slate-200">คลิกเพื่อเลือกรูป หรือลากไฟล์มาวาง</p>
+                            <p id="file-label" class="text-sm font-medium text-slate-200">คลิกเพื่อเลือกรูปใบหน้าของคุณ</p>
                             <p class="text-xs text-slate-500 mt-1">รองรับ JPG, PNG และ HEIC (iPhone)</p>
                         </div>
                     </div>
@@ -109,7 +115,7 @@
                 <button id="search-btn" disabled 
                         class="w-full py-3.5 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2">
                     <i data-lucide="sparkles" class="w-5 h-5"></i>
-                    เริ่มสแกนค้นหาใบหน้า
+                    เริ่มสแกนค้นหาโฟลเดอร์กิจกรรม
                 </button>
             </div>
         </section>
@@ -125,17 +131,18 @@
             </div>
         </div>
 
-        <!-- Results Grid -->
-        <section id="results-section" class="hidden space-y-4">
-            <div class="flex items-center justify-between">
+        <!-- 📂 Results Section (แสดงผลลัพธ์แยกกลุ่มตามงาน) -->
+        <section id="results-section" class="hidden space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 class="text-lg font-semibold text-white flex items-center gap-2">
                     <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
-                    ผลการค้นพบภาพใบหน้าของคุณ
+                    พบรูปภาพของคุณในโฟลเดอร์กิจกรรมต่อไปนี้
                 </h3>
                 <span id="match-count-badge" class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-lg"></span>
             </div>
 
-            <div id="photo-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
+            <!-- คอนเทนเนอร์หลักสำหรับจัดกลุ่มภาพตามโฟลเดอร์งาน -->
+            <div id="events-container" class="space-y-8"></div>
         </section>
 
     </main>
@@ -234,7 +241,7 @@
                 if (data.success && data.photos.length > 0) {
                     drivePhotos = data.photos;
                     badge.className = "px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-2";
-                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> พร้อมใช้งาน (คลังภาพ ${drivePhotos.length} รูป)`;
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> พร้อมใช้งาน (${drivePhotos.length} รูปในระบบ)`;
                 } else {
                     badge.className = "px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2";
                     badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> คลังภาพว่างเปล่า (0 รูป)`;
@@ -248,15 +255,27 @@
             }
         }
 
+        function handleAdminUploadClick() {
+            const evtName = document.getElementById('event-name-input').value.trim();
+            if (!evtName) {
+                alert('กรุณาระบุชื่องาน/อัลบั้ม ก่อนเลือกรูปภาพครับ');
+                return;
+            }
+            document.getElementById('gallery-input').click();
+        }
+
         const galleryInput = document.getElementById('gallery-input');
         if (galleryInput) {
             galleryInput.addEventListener('change', async (e) => {
                 const files = e.target.files;
                 if (!files.length) return;
                 const statusText = document.getElementById('upload-status');
-                statusText.innerText = '⏳ กำลังอัปโหลดภาพต้นฉบับ...';
+                const evtName = document.getElementById('event-name-input').value.trim();
+                
+                statusText.innerText = `⏳ กำลังอัปโหลดภาพลงโฟลเดอร์ "${evtName}"...`;
                 
                 const formData = new FormData();
+                formData.append('event_name', evtName);
                 for (let file of files) formData.append('photos', file);
                 
                 try {
@@ -314,11 +333,11 @@
             const statusText = document.getElementById('status-text');
             const progressBar = document.getElementById('progress-bar');
             const resultsSection = document.getElementById('results-section');
-            const photoGrid = document.getElementById('photo-grid');
+            const eventsContainer = document.getElementById('events-container');
 
             banner.classList.remove('hidden');
             resultsSection.classList.add('hidden');
-            photoGrid.innerHTML = '';
+            eventsContainer.innerHTML = '';
             progressBar.style.width = '10%';
 
             let imgElement = new Image();
@@ -354,12 +373,15 @@
 
             const matcher = new faceapi.FaceMatcher(targetDetection, 0.60);
             let matchCount = 0;
+            
+            // โครงสร้างจัดกลุ่มตามโฟลเดอร์งาน { "งานกีฬา": [photo1, photo2], "งานรับน้อง": [photo3] }
+            const matchedByEvent = {};
 
             for (let i = 0; i < drivePhotos.length; i++) {
                 const photo = drivePhotos[i];
                 const pct = Math.round(30 + ((i + 1) / drivePhotos.length) * 70);
                 progressBar.style.width = `${pct}%`;
-                statusText.innerHTML = `<i data-lucide="search" class="w-4 h-4 animate-spin"></i> สแกนคลังภาพ (${i + 1}/${drivePhotos.length})...`;
+                statusText.innerHTML = `<i data-lucide="search" class="w-4 h-4 animate-spin"></i> สแกนรูปภาพ (${i + 1}/${drivePhotos.length})...`;
                 lucide.createIcons();
 
                 try {
@@ -383,35 +405,67 @@
 
                     if (isMatched) {
                         matchCount++;
-                        const card = document.createElement('div');
-                        card.className = "group relative bg-slate-800 border border-slate-700/80 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-all duration-300";
-                        
-                        // ⚡ ปุ่มดาวน์โหลดแบบลิงก์ตรงภาพต้นฉบับ (Full HD / 4K ชัด 100%)
-                        const targetAttr = photo.is_drive ? 'target="_blank"' : '';
-                        card.innerHTML = `
-                            <img src="${photo.base64}" class="w-full aspect-square object-cover">
-                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex items-end">
-                                <a href="${photo.download_url}" ${targetAttr} download="matched_photo_hd.jpg" 
-                                   class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs text-center font-medium rounded-lg shadow flex items-center justify-center gap-1.5 transition">
-                                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                                    โหลดภาพคมชัด HD (100%)
-                                </a>
-                            </div>
-                        `;
-                        photoGrid.appendChild(card);
-                        lucide.createIcons();
-                        resultsSection.classList.remove('hidden');
+                        const evt = photo.event_name || "อัลบั้มทั่วไป";
+                        if (!matchedByEvent[evt]) {
+                            matchedByEvent[evt] = [];
+                        }
+                        matchedByEvent[evt].push(photo);
                     }
                 } catch (e) {
                     console.log(e);
                 }
             }
 
+            // แสดงผลลัพธ์แยกตามโฟลเดอร์กิจกรรม
+            if (matchCount > 0) {
+                for (const [eventName, photoArray] of Object.entries(matchedByEvent)) {
+                    const eventBlock = document.createElement('div');
+                    eventBlock.className = "bg-slate-800/60 border border-slate-700/80 rounded-2xl p-5 space-y-4 shadow-lg";
+                    
+                    let cardsHTML = '';
+                    photoArray.forEach(photo => {
+                        const targetAttr = photo.is_drive ? 'target="_blank"' : '';
+                        cardsHTML += `
+                            <div class="group relative bg-slate-900 border border-slate-700/80 rounded-xl overflow-hidden shadow hover:scale-105 transition-all duration-300">
+                                <img src="${photo.base64}" class="w-full aspect-square object-cover">
+                                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex items-end">
+                                    <a href="${photo.download_url}" ${targetAttr} download="matched_photo.jpg" 
+                                       class="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs text-center font-medium rounded-lg shadow flex items-center justify-center gap-1 transition">
+                                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                        โหลดภาพ HD (100%)
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    eventBlock.innerHTML = `
+                        <div class="flex items-center gap-2 border-b border-slate-700/60 pb-3">
+                            <div class="p-2 bg-blue-500/10 text-blue-400 rounded-lg">
+                                <i data-lucide="folder-open" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-white text-base">โฟลเดอร์งาน: ${eventName}</h4>
+                                <p class="text-xs text-slate-400">พบ ${photoArray.length} รูปในงานนี้</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            ${cardsHTML}
+                        </div>
+                    `;
+
+                    eventsContainer.appendChild(eventBlock);
+                }
+                
+                lucide.createIcons();
+                resultsSection.classList.remove('hidden');
+            }
+
             statusText.innerHTML = matchCount > 0 
                 ? `<span class="text-emerald-400">🎉 สแกนเรียบร้อย! พบใบหน้าตรงกัน ${matchCount} รูป</span>`
-                : `<span class="text-amber-400">❌ สแกนเรียบร้อย ไม่พบใบหน้านี้ในคลังภาพ</span>`;
+                : `<span class="text-amber-400">❌ สแกนเรียบร้อย ไม่พบใบหน้านี้ในโฟลเดอร์งานใดๆ</span>`;
 
-            document.getElementById('match-count-badge').innerText = `พบ ${matchCount} รูป`;
+            document.getElementById('match-count-badge').innerText = `พบรวม ${matchCount} รูป`;
         });
 
         window.onload = initApp;
