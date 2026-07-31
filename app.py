@@ -1,23 +1,28 @@
 import io
+import os
 from flask import Flask, render_template, request, jsonify
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
+# 1. ประกาศตัวแปร app ก่อนเสมอเพื่อป้องกัน NameError
+app = Flask(__name__)
+
 # ----------------- ตั้งค่า Google Drive -----------------
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
-SERVICE_ACCOUNT_FILE = 'credentials.json' # ไฟล์คีย์ JSON จาก Gmail ส่วนตัว
+SERVICE_ACCOUNT_FILE = 'credentials.json' # ไฟล์คีย์ JSON จาก Google Cloud Console
 
-# รหัส ID โฟลเดอร์หลักใน Drive โรงเรียนที่คุณเปิดแชร์ให้ Service Account ไว้
+# Folder ID หลักใน Drive โรงเรียนที่คุณให้มา
 MAIN_FOLDER_ID = '132CYeMEU-ZBUU0vMxsV73aw2W8zugwXm' 
 
 def get_drive_service():
+    """เชื่อมต่อกับ Google Drive API"""
     creds = service_account.Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('drive', 'v3', credentials=creds)
 
 def create_subfolder_in_drive(folder_name, parent_folder_id):
-    """สร้างโฟลเดอร์ใหม่ตามชื่องาน"""
+    """สร้างโฟลเดอร์ย่อยใหม่ตามชื่องานใน Google Drive"""
     service = get_drive_service()
     folder_metadata = {
         'name': folder_name,
@@ -43,6 +48,10 @@ def upload_file_to_drive(file_obj, filename, target_folder_id):
     return file
 
 # ----------------- Routes -----------------
+
+@app.route('/')
+def home():
+    return "Web Application is running!"
 
 # Route หน้าเว็บแอดมินสำหรับอัปโหลด
 @app.route('/admin')
@@ -76,3 +85,6 @@ def admin_upload_event():
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
