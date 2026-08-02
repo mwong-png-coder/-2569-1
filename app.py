@@ -1,108 +1,82 @@
 import io
 import os
+import re
+import json
 from flask import Flask, render_template, request, jsonify
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 
-# 1. ประกาศตัวแปร app ก่อนเสมอ
 app = Flask(__name__)
 
 # ----------------- ตั้งค่า Google Drive -----------------
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
-SERVICE_ACCOUNT_FILE = 'credentials.json'
-
-# Folder ID หลักใน Google Drive
-MAIN_FOLDER_ID = '132CYeMEU-ZBUU0vMxsV73aw2W8zugwXm'
-
-import json
-
-# ----------------- ตั้งค่า Google Drive -----------------
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
-MAIN_FOLDER_ID = '132CYeMEU-ZBUU0vMxsV73aw2W8zugwXm'
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.metadata.readonly']
 
 def get_drive_service():
-    """เชื่อมต่อกับ Google Drive API จาก Environment Variable"""
+    """เชื่อมต่อกับ Google Drive API"""
     creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
-    
-    if not creds_json_str:
-        # กรณีรันใน Local แล้วไม่มี Environment Variable ให้ถอยไปอ่านจากไฟล์ credentials.json แทน
-        creds = service_account.Credentials.from_service_account_file(
-            'credentials.json', scopes=SCOPES)
+    if creds_json_str:
+        try:
+            creds_info = json.loads(creds_json_str)
+            creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+        except Exception:
+            creds = service_account.Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
     else:
-        # อ่านจาก Render Environment Variable
-        creds_info = json.loads(creds_json_str)
-        creds = service_account.Credentials.from_service_account_info(
-            creds_info, scopes=SCOPES)
+        creds = service_account.Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
             
     return build('drive', 'v3', credentials=creds)
-def create_subfolder_in_drive(folder_name, parent_folder_id):
-    """สร้างโฟลเดอร์ย่อยใหม่ตามชื่องานใน Google Drive"""
-    service = get_drive_service()
-    folder_metadata = {
-        'name': folder_name,
-        'mimeType': 'application/vnd.google-apps.folder',
-        'parents': [parent_folder_id]
-    }
-    folder = service.files().create(body=folder_metadata, fields='id').execute()
-    return folder.get('id')
 
-def upload_file_to_drive(file_obj, filename, target_folder_id):
-    """อัปโหลดไฟล์รูปภาพเข้าโฟลเดอร์ย่อย"""
-    service = get_drive_service()
-    file_metadata = {
-        'name': filename,
-        'parents': [target_folder_id]
-    }
-    media = MediaIoBaseUpload(io.BytesIO(file_obj.read()), mimetype=file_obj.content_type, resumable=True)
-    file = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields='id, webViewLink'
-    ).execute()
-    return file
+def extract_folder_id(url):
+    """ดึง Folder ID จาก URL ของ Google Drive"""
+    match = re.search(r'folders/([a-zA-Z0-9_-]+)', url)
+    if match:
+        return match.group(1)
+    return url.strip()
 
 # ----------------- Routes -----------------
 
-# 1. หน้าหลัก (หน้าบ้านสำหรับคนทั่วไปถ่ายรูปสแกนหน้า)
 @app.route('/')
 def home():
     return render_template('index.html')
 
-# 2. หน้าแอดมินสำหรับอัปโหลดรูปภาพ
 @app.route('/admin')
 def admin_page():
     return render_template('admin.html')
 
-# 3. Route สำหรับรับรูปและชื่องานมาสร้างโฟลเดอร์และอัปโหลดลง Drive
-@app.route('/admin/upload-event', methods=['POST'])
-def admin_upload_event():
+# Route สำหรับซิงค์ข้อมูลรูปจากโฟลเดอร์ Google Drive
+@app.route('/admin/sync-folder', methods=['POST'])
+def sync_folder():
     try:
-        event_name = request.form.get('event_name')
-        files = request.files.getlist('photos')
-        
-        if not event_name or not files or files[0].filename == '':
-            return jsonify({'success': False, 'message': 'กรุณาระบุชื่องานและเลือกรูปภาพอย่างน้อย 1 รูป'}), 400
+        data = request.get_json()
+        folder_url = data.get('folder_url', '')
+        folder_id = extract_folder_id(folder_url)
 
-        # สร้างโฟลเดอร์ตามชื่องานใน Google Drive
-        subfolder_id = create_subfolder_in_drive(event_name, MAIN_FOLDER_ID)
-        
-        # วนลูปยิงรูปเข้าไปในโฟลเดอร์นั้น
-        uploaded_count = 0
-        for file in files:
-            if file and file.filename != '':
-                upload_file_to_drive(file, file.filename, subfolder_id)
-                uploaded_count += 1
+        if not folder_id:
+            return jsonify({'success': False, 'message': 'กรุณาระบุ URL โฟลเดอร์ Google Drive ให้ถูกต้อง'}), 400
+
+        service = get_drive_service()
+
+        # 1. ดึงชื่อโฟลเดอร์
+        folder_metadata = service.files().get(fileId=folder_id, fields='name').execute()
+        folder_name = folder_metadata.get('name', 'ไม่ทราบชื่อโฟลเดอร์')
+
+        # 2. ค้นหารูปภาพทั้งหมดในโฟลเดอร์นั้น
+        query = f"'{folder_id}' in parents and mimeType contains 'image/' and trashed = false"
+        results = service.files().list(
+            q=query,
+            pageSize=1000,
+            fields="files(id, name, webViewLink, thumbnailLink)"
+        ).execute()
+
+        photos = results.get('files', [])
 
         return jsonify({
-            'success': True, 
-            'message': f'สร้างโฟลเดอร์ "{event_name}" และอัปโหลดรูปภาพจำนวน {uploaded_count} รูปเข้า Google Drive เรียบร้อยแล้ว!'
+            'success': True,
+            'message': f'พบอัลบั้ม "{folder_name}" พร้อมรูปภาพจำนวน {len(photos)} รูปใน Google Drive เรียบร้อยแล้ว!'
         })
 
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': f'ไม่สามารถเข้าถึงโฟลเดอร์ได้: {str(e)} (กรุณาเช็กว่าได้กดแชร์โฟลเดอร์ให้ Service Account หรือยัง)'}), 500
 
-# ----------------- Main Run (ตั้งค่า Bind Port สำหรับ Render) -----------------
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
