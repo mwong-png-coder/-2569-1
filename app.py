@@ -14,8 +14,36 @@ SCOPES = [
 ]
 
 def get_drive_service():
-    """เชื่อมต่อกับ Google Drive API พร้อมแก้ปัญหา Invalid JWT Signature"""
-    creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+    """เชื่อมต่อกับ Google Drive API โดยรองรับทั้ง Base64 และ JSON ปกติ"""
+    creds_raw = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+    
+    if creds_raw:
+        try:
+            # 1. พยายามถอดรหัส Base64 ก่อน
+            try:
+                decoded_bytes = base64.b64decode(creds_raw)
+                creds_info = json.loads(decoded_bytes.decode('utf-8'))
+            except Exception:
+                # 2. ถ้าไม่ใช่ Base64 ให้ถอยมาอ่านแบบ JSON ปกติ
+                creds_info = json.loads(creds_raw)
+                if 'private_key' in creds_info and isinstance(creds_info['private_key'], str):
+                    creds_info['private_key'] = creds_info['private_key'].replace('\\n', '\n')
+                
+            return build('drive', 'v3', credentials=service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES))
+        except Exception as e:
+            # ปริ้นท์บอกสาเหตุที่ถอดรหัส Env Var ไม่ผ่านใน Logs ของ Render
+            print(f"Error parsing GOOGLE_CREDENTIALS_JSON: {e}")
+            raise Exception(f"อ่าน GOOGLE_CREDENTIALS_JSON ไม่สำเร็จ: {e}")
+    else:
+        # กรณีรันในเครื่อง Local
+        if os.path.exists('credentials.json'):
+            creds = service_account.Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+            return build('drive', 'v3', credentials=creds)
+        elif os.path.exists('credentials.json.json'):
+            creds = service_account.Credentials.from_service_account_file('credentials.json.json', scopes=SCOPES)
+            return build('drive', 'v3', credentials=creds)
+        else:
+            raise Exception("ไม่พบตัวแปร GOOGLE_CREDENTIALS_JSON บน Render และไม่มีไฟล์ credentials.json ในเครื่อง")
     
     if creds_json_str:
         try:
