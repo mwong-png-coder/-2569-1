@@ -15,12 +15,27 @@ SERVICE_ACCOUNT_FILE = 'credentials.json'
 # Folder ID หลักใน Google Drive
 MAIN_FOLDER_ID = '132CYeMEU-ZBUU0vMxsV73aw2W8zugwXm'
 
-def get_drive_service():
-    """เชื่อมต่อกับ Google Drive API"""
-    creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return build('drive', 'v3', credentials=creds)
+import json
 
+# ----------------- ตั้งค่า Google Drive -----------------
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
+MAIN_FOLDER_ID = '132CYeMEU-ZBUU0vMxsV73aw2W8zugwXm'
+
+def get_drive_service():
+    """เชื่อมต่อกับ Google Drive API จาก Environment Variable"""
+    creds_json_str = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+    
+    if not creds_json_str:
+        # กรณีรันใน Local แล้วไม่มี Environment Variable ให้ถอยไปอ่านจากไฟล์ credentials.json แทน
+        creds = service_account.Credentials.from_service_account_file(
+            'credentials.json', scopes=SCOPES)
+    else:
+        # อ่านจาก Render Environment Variable
+        creds_info = json.loads(creds_json_str)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_info, scopes=SCOPES)
+            
+    return build('drive', 'v3', credentials=creds)
 def create_subfolder_in_drive(folder_name, parent_folder_id):
     """สร้างโฟลเดอร์ย่อยใหม่ตามชื่องานใน Google Drive"""
     service = get_drive_service()
