@@ -5,15 +5,15 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-# 1. ประกาศตัวแปร app ก่อนเสมอเพื่อป้องกัน NameError
+# 1. ประกาศตัวแปร app ก่อนเสมอ
 app = Flask(__name__)
 
 # ----------------- ตั้งค่า Google Drive -----------------
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
-SERVICE_ACCOUNT_FILE = 'credentials.json' # ไฟล์คีย์ JSON จาก Google Cloud Console
+SERVICE_ACCOUNT_FILE = 'credentials.json'
 
-# Folder ID หลักใน Drive โรงเรียนที่คุณให้มา
-MAIN_FOLDER_ID = '132CYeMEU-ZBUU0vMxsV73aw2W8zugwXm' 
+# Folder ID หลักใน Google Drive
+MAIN_FOLDER_ID = '132CYeMEU-ZBUU0vMxsV73aw2W8zugwXm'
 
 def get_drive_service():
     """เชื่อมต่อกับ Google Drive API"""
@@ -49,16 +49,17 @@ def upload_file_to_drive(file_obj, filename, target_folder_id):
 
 # ----------------- Routes -----------------
 
+# 1. หน้าหลัก (หน้าบ้านสำหรับคนทั่วไปถ่ายรูปสแกนหน้า)
 @app.route('/')
 def home():
-    return "Web Application is running!"
+    return render_template('index.html')
 
-# Route หน้าเว็บแอดมินสำหรับอัปโหลด
+# 2. หน้าแอดมินสำหรับอัปโหลดรูปภาพ
 @app.route('/admin')
 def admin_page():
     return render_template('admin.html')
 
-# Route รับข้อมูลสร้างโฟลเดอร์และอัปโหลดรูป
+# 3. Route สำหรับรับรูปและชื่องานมาสร้างโฟลเดอร์และอัปโหลดลง Drive
 @app.route('/admin/upload-event', methods=['POST'])
 def admin_upload_event():
     try:
@@ -68,10 +69,10 @@ def admin_upload_event():
         if not event_name or not files or files[0].filename == '':
             return jsonify({'success': False, 'message': 'กรุณาระบุชื่องานและเลือกรูปภาพอย่างน้อย 1 รูป'}), 400
 
-        # 1. สร้างโฟลเดอร์ตามชื่องานใน Google Drive
+        # สร้างโฟลเดอร์ตามชื่องานใน Google Drive
         subfolder_id = create_subfolder_in_drive(event_name, MAIN_FOLDER_ID)
         
-        # 2. วนลูปยิงรูปเข้าไปในโฟลเดอร์นั้น
+        # วนลูปยิงรูปเข้าไปในโฟลเดอร์นั้น
         uploaded_count = 0
         for file in files:
             if file and file.filename != '':
@@ -86,5 +87,7 @@ def admin_upload_event():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+# ----------------- Main Run (ตั้งค่า Bind Port สำหรับ Render) -----------------
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
